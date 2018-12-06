@@ -8,6 +8,12 @@ os:
 before_install:
 - echo $LANG
 - echo $LC_ALL
+- cd ./ext_lib/xlnt-1.3.0
+- mkdir build
+- cd build
+- cmake ..
+- make -j5
+- cd ../../
 - mkdir build && cd build && cmake ..
 script:
 - make -j5

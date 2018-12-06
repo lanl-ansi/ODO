@@ -6,6 +6,7 @@ find_path(XLNT_INCLUDE_DIR
 	NAMES xlnt.hpp
 	HINTS /usr/local/include
 	HINTS ext_lib/xlnt-1.3.0/include/xlnt
+	HINTS ext_lib/xlnt-1.3.0/build/include/xlnt
 	HINTS ${XLNT_ROOT_DIR}/include
 )
 
@@ -14,6 +15,7 @@ find_library(XLNT_LIBRARY
 	libxlnt.dylib
 	HINTS /usr/local/lib
 	HINTS ext_lib/xlnt-1.3.0/source
+	HINTS ext_lib/xlnt-1.3.0/build/source
 	HINTS ${XLNT_ROOT_DIR}/source
 )
 elseif(UNIX)
@@ -21,6 +23,7 @@ find_library(XLNT_LIBRARY
 	libxlnt.so
 	HINTS /usr/local/lib
 	HINTS ext_lib/xlnt-1.3.0/source
+	HINTS ext_lib/xlnt-1.3.0/build/source
 	HINTS ${XLNT_ROOT_DIR}/source
 )
 endif()
