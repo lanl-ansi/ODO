@@ -1,0 +1,12 @@
+prefix=/home/hlh/3.12.9/build
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include/coin
+
+Name: IPOPT
+Description: Interior Point Optimizer
+URL: https://projects.coin-or.org/Ipopt
+Version: 3.12.9
+Libs: -L${libdir} -lipopt -lm  -ldl
+Cflags: -I${includedir}
+Requires: coinhsl >= 1.3 coinlapack coinblas 

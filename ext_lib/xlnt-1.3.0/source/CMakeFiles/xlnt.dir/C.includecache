@@ -1,0 +1,24 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/Users/hlh/Dropbox/Work/Collaborations/Harsha/Networked_Microgrid/private-gravity/ext_lib/xlnt-1.3.0/source/detail/cryptography/sha1.c
+stddef.h
+-
+stdint.h
+-
+string.h
+-
+
+/Users/hlh/Dropbox/Work/Collaborations/Harsha/Networked_Microgrid/private-gravity/ext_lib/xlnt-1.3.0/source/detail/cryptography/sha512.c
+stddef.h
+-
+stdint.h
+-
+string.h
+-
+

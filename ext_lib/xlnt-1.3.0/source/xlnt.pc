@@ -1,0 +1,10 @@
+Name: xlnt
+Description: cross-platform user-friendly xlsx library for C++11
+Version: 1.2
+URL: https://github.com/tfussell/xlnt
+prefix=/usr/local
+includedir=/usr/local/include
+libdir=/usr/local/lib
+exec_prefix=
+Libs: -L${libdir} -lxlnt
+Cflags: -I${includedir}
