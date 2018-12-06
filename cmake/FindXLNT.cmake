@@ -24,6 +24,7 @@ find_library(XLNT_LIBRARY
 	HINTS /usr/local/lib
 	HINTS ext_lib/xlnt-1.3.0/source
 	HINTS ext_lib/xlnt-1.3.0/build/source
+	HINTS ext_lib/xlnt-1.3.0/build/lib
 	HINTS ${XLNT_ROOT_DIR}/source
 )
 endif()
