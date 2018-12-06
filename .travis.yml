@@ -1,0 +1,14 @@
+language: cpp
+sudo: required
+compiler:
+- clang
+- gcc
+os:
+- linux
+before_install:
+- echo $LANG
+- echo $LC_ALL
+- mkdir build && cd build && cmake ..
+script:
+- make -j5
+- ../bin/odo
