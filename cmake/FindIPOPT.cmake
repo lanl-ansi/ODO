@@ -13,6 +13,7 @@ find_path(IPOPT_INCLUDE_DIR
 if(APPLE)
 find_library(IPOPT_LIBRARY
 	libipopt.dylib
+	HINTS ext_lib/Ipopt/lib
 	HINTS /usr/local/lib
 	HINTS ${IPOPT_ROOT_DIR}/lib
 )
@@ -20,7 +21,7 @@ elseif(UNIX)
 find_library(IPOPT_LIBRARY
 	libipopt.so
 	HINTS /usr/local/lib
-	HINTS ext_lib/Ipopt/build/lib
+	HINTS ext_lib/Ipopt/lib
 	HINTS ${IPOPT_ROOT_DIR}/lib
 )
 endif()
