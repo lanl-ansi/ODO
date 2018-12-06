@@ -13,7 +13,7 @@ before_install:
 - cd build
 - cmake ..
 - make -j5
-- cd ../../
+- cd ../../../
 - mkdir build && cd build && cmake ..
 script:
 - make -j5
