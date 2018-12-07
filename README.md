@@ -2,7 +2,7 @@
 [![License](https://img.shields.io/badge/License-BSD--3-brightgreen.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
 <p align="center">
-<img src="media/ODO_logo.png" width="90">
+<img src="media/LOGO.png">
 </p>
 <p align="center"> Operations & Design Optimization for Networked Microgrids </p>
 <p align="center">Funded by the U.S. Department Of Energy (Program of Dan Ton)</p>
@@ -14,3 +14,8 @@
 </p>
 
 
+*****************************
+See [INSTALL.md](INSTALL.md) for instructions on compiling ODO
+
+After running make, the ODO executable can be found under ODO/bin/
+*****************************
