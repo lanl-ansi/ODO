@@ -26,17 +26,42 @@ Cplex: https://www-01.ibm.com/software/commerce/optimization/cplex-optimizer/
 
 
 -------
+First, make sure gfortran and gcc-6 or clang are installed.
 
-Follow these simple instructions:
+Here are a set of instructions to install gfortran and gcc-6 on Ubuntu:
 
-* `cd ODO`
+* `sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y`
 
-* `mkdir build`
+* `sudo apt update`
 
-* `cd build`
+* `sudo apt-get upgrade`
 
-* `cmake ..`
+* `sudo apt-get install gfortran`
 
-* `make -j4`
+* `sudo apt-get install gcc-6 g++-6`
+
+* `export CC=/usr/bin/gcc-6`
+
+* `export CXX=/usr/bin/g++-6`
+
+
+To build ODO, follow the instructions below:
+
+* `cd ./ext_lib/xlnt-1.3.0`
+
+* `mkdir build && cd build && cmake ..`
+
+* `make -j5 && cd ../../../`
+
+* `mkdir build && cd build && cmake ..`
+
+* `make -j5`
 
 The corresponding executable will then appear under `ODO/bin`.
+
+For running the tool, enter:
+
+* `../bin/odo`
+
+
+
