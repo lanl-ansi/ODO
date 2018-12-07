@@ -1,7 +1,9 @@
 [![Build Status](https://travis-ci.org/lanl-ansi/ODO.svg?branch=master)](https://travis-ci.org/lanl-ansi/ODO)
 [![License](https://img.shields.io/badge/License-BSD--3-brightgreen.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
-# ODO
+<p align="center">
+<img src="media/ODO_logo.png" width="90">
+</p>
 <p align="center"> Operations & Design Optimization for Networked Microgrids </p>
 <p align="center">Funded by the U.S. Department Of Energy (Program of Dan Ton)</p>
 
