@@ -45,6 +45,8 @@ Here are a set of instructions to install cmake, gfortran and gcc-6 on Ubuntu:
 
 * `sudo apt-get install gfortran`
 
+* `sudo apt-get install libgfortran3`
+
 * `sudo apt-get install gcc-6 g++-6`
 
 * `export CC=/usr/bin/gcc-6`
@@ -64,6 +66,8 @@ If you're having trouble with gcc-6 try installing clang:
 * `sudo apt-get install cmake`
 
 * `sudo apt-get install gfortran`
+
+* `sudo apt-get install libgfortran3`
 
 * `export CC=/usr/bin/clang`
 
