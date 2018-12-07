@@ -2,7 +2,7 @@
 [![License](https://img.shields.io/badge/License-BSD--3-brightgreen.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
 <p align="center">
-<img src="media/LOGO.png">
+<img src="media/LOGO.jpg">
 </p>
 <p align="center"> Operations & Design Optimization for Networked Microgrids </p>
 <p align="center">Funded by the U.S. Department Of Energy (Program of Dan Ton)</p>
