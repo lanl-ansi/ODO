@@ -6,6 +6,7 @@ compiler:
 os:
 - linux
 before_install:
+- sudo apt-get install gfortran
 - echo $LANG
 - echo $LC_ALL
 - cd ./ext_lib/xlnt-1.3.0
