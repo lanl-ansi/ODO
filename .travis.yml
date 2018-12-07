@@ -5,13 +5,15 @@ compiler:
 - gcc
 os:
 - linux
+addons:
+ apt:
+  sources:
+   - ubuntu-toolchain-r-test
+  packages:
+   - gcc-6
+   - g++-6
 before_install:
-- sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
-- sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 6494C6D6997C215E
-- sudo apt update
-- sudo apt-get upgrade
 - sudo apt-get install gfortran
-- sudo apt-get install gcc-6 g++-6 -y
 - export CC=/usr/bin/gcc-6  
 - export CXX=/usr/bin/g++-6
 - echo $LANG
