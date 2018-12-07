@@ -7,6 +7,7 @@ os:
 - linux
 before_install:
 - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+- sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 6494C6D6997C215E
 - sudo apt update
 - sudo apt-get upgrade
 - sudo apt-get install gfortran
