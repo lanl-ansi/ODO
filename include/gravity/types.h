@@ -15,6 +15,7 @@
 #include <string>
 #include <iostream>
 #include <memory>
+#include <algorithm>
 
 namespace gravity{
 #define EPS 0.00001
