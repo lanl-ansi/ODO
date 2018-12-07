@@ -469,8 +469,10 @@ void PowerNet::readJSON(const string& fname){
         for (auto i = 0; i<3; i++) {
             bus->_cond[i]->_bs = bs[i].GetDouble();
             bus->_cond[i]->_gs = gs[i].GetDouble();
-            gs_.set_val(bus->_name+",ph"+to_string(i), bus->_cond[i]->_gs/pow(bMVA,2));
-            bs_.set_val(bus->_name+",ph"+to_string(i), bus->_cond[i]->_bs/pow(bMVA,2));
+//            gs_.set_val(bus->_name+",ph"+to_string(i), bus->_cond[i]->_gs/pow(bMVA,0));
+//            bs_.set_val(bus->_name+",ph"+to_string(i), bus->_cond[i]->_bs/pow(bMVA,2));
+            gs_.set_val(bus->_name+",ph"+to_string(i), 0);
+            bs_.set_val(bus->_name+",ph"+to_string(i), 0);
         }
         
     }

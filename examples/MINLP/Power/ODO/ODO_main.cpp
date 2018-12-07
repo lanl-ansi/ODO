@@ -78,7 +78,7 @@ int main (int argc, char * argv[])
         DebugOn("Using Convex Distflow model\n");
     }
     
-    grid.readJSON(string(prj_dir)+"/data_sets/Power/IEEE13_latest.json");
+    grid.readJSON(string(prj_dir)+"/data_sets/Power/IEEE13.json");
     auto stat = grid.readODO(fname);
     if (stat==-1) {
         cerr << "Error reading Excel File, Exising" << endl;
