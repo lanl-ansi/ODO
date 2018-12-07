@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <string>
 #include <iostream>
+#include <memory>
 
 namespace gravity{
 #define EPS 0.00001
