@@ -20,6 +20,17 @@ See [INSTALL.md](INSTALL.md) for instructions on compiling ODO
 After running make, the ODO executable can be found under ODO/bin/
 *****************************
 
+# Input
+
+ODO takes two different files as input: [NET.json](data_sets/Power/IEEE13.json) and [ODO_INPUT.xlsx](data_sets/Power/ODO_INPUT.xlsx), these can be found under [data_sets/Power](data_sets/Power).
+
+The first file contains all the network properties including branch resistance/reactance, bus shunts, operating limits, and others.
+
+The excel file allows the user to adjust investment options and setup configurations such as runtime limit, maximum number of iterations, and others.
+
+
 # Licence
 
 This code is provided under a BSD license as part of the Multi-Infrastructure Control and Optimization Toolkit (MICOT) project, LA-CC-13-108.
+
+
