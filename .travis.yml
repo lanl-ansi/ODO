@@ -6,11 +6,11 @@ compiler:
 os:
 - linux
 before_install:
-- sudo add-apt-repository ppa:ubuntu-toolchain-r/test
-- sudo apt update
+- sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+- sudo apt update -q
 - sudo apt-get upgrade
 - sudo apt-get install gfortran
-- sudo apt-get install gcc-6 g++-6
+- sudo apt-get install gcc-6 g++-6 -y
 - export CC=/usr/bin/gcc-6  
 - export CXX=/usr/bin/g++-6
 - echo $LANG
