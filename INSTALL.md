@@ -49,9 +49,6 @@ Here are a set of instructions to install cmake, gfortran and gcc-6 on Ubuntu:
 
 * `sudo apt-get install gcc-6 g++-6`
 
-* `export CC=/usr/bin/gcc-6`
-
-* `export CXX=/usr/bin/g++-6`
 
 If you're having trouble with gcc-6 try installing clang:
 
@@ -69,11 +66,7 @@ If you're having trouble with gcc-6 try installing clang:
 
 * `sudo apt-get install libgfortran3`
 
-* `export CC=/usr/bin/clang`
-
-* `export CXX=/usr/bin/clang`
-
-For Mac users, get the installers from the websites:
+For Mac users, simply download and run the installers from the websites:
 
 cmake: http://www.cmake.org (Version 3.2 or better)
 
@@ -82,7 +75,21 @@ clang: https://clang.llvm.org/get_started.html
 gfortran: https://gcc.gnu.org/wiki/GFortranBinaries
 
 
-To build ODO, follow the instructions below:
+To build **ODO**, follow the instructions below:
+
+If you're using gcc-6, enter:
+
+* `export CC=/usr/bin/gcc-6`
+
+* `export CXX=/usr/bin/g++-6`
+
+If using clang, enter:
+
+* `export CC=/usr/bin/clang`
+
+* `export CXX=/usr/bin/clang`
+
+Now, we're ready to compile **ODO** and its dependencies, enter:
 
 * `cd ./ext_lib/xlnt-1.3.0`
 
@@ -94,7 +101,15 @@ To build ODO, follow the instructions below:
 
 * `make -j5`
 
-The corresponding executable will then appear under `ODO/bin`.
+#### Linux Virtual Machine
+
+If you're using a Linux virtual machine, enter the following command before running the tool:
+
+* `cd ../ext_lib/Ipopt/lib && cp * /usr/local/lib`
+
+
+
+The **ODO** executable will then appear under `ODO/bin`.
 
 For running the tool, enter:
 
