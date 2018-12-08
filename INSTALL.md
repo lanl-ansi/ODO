@@ -118,7 +118,7 @@ Now, we're ready to compile **ODO** and its dependencies, enter:
 
 If you're using a Linux virtual machine, enter the following command before running the tool:
 
-* `cd ../ext_lib/Ipopt/lib && cp * /usr/local/lib`
+* `cp ../ext_lib/Ipopt/lib/* /usr/local/lib`
 
 
 
