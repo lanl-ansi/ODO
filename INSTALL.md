@@ -88,6 +88,8 @@ If you're having trouble with gcc-6 try installing clang:
 
 To build **ODO**, follow the instructions below:
 
+### Compiling the ODO tool
+
 If you're using gcc-6, enter:
 
 * `export CC=/usr/bin/gcc-6`
@@ -99,8 +101,6 @@ If using clang, enter:
 * `export CC=/usr/bin/clang`
 
 * `export CXX=/usr/bin/clang`
-
-### Compiling the ODO tool
 
 Now, we're ready to compile **ODO** and its dependencies, enter:
 
@@ -119,7 +119,6 @@ Now, we're ready to compile **ODO** and its dependencies, enter:
 If you're using a Linux virtual machine, enter the following command before running the tool:
 
 * `cp ../ext_lib/Ipopt/lib/* /usr/local/lib`
-
 
 
 The **ODO** executable will can be found under `ODO/bin`.
