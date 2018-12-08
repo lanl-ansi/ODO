@@ -30,7 +30,25 @@ Cplex: https://www-01.ibm.com/software/commerce/optimization/cplex-optimizer/
 
 
 -------
+
 First, make sure cmake, gfortran and gcc-6 or clang are installed.
+
+### Windows Users
+
+We are working on adding binaries for Windows users, check back soon!
+
+### Mac Users
+
+For Mac users, simply download and run the installers for the dependencies from the websites:
+
+cmake: http://www.cmake.org (Version 3.2 or better)
+
+clang: https://clang.llvm.org/get_started.html 
+
+gfortran: https://gcc.gnu.org/wiki/GFortranBinaries
+
+
+### Linux Users 
 
 Here are a set of instructions to install cmake, gfortran and gcc-6 on Ubuntu:
 
@@ -66,13 +84,6 @@ If you're having trouble with gcc-6 try installing clang:
 
 * `sudo apt-get install libgfortran3`
 
-For Mac users, simply download and run the installers from the websites:
-
-cmake: http://www.cmake.org (Version 3.2 or better)
-
-clang: https://clang.llvm.org/get_started.html 
-
-gfortran: https://gcc.gnu.org/wiki/GFortranBinaries
 
 
 To build **ODO**, follow the instructions below:
@@ -88,6 +99,8 @@ If using clang, enter:
 * `export CC=/usr/bin/clang`
 
 * `export CXX=/usr/bin/clang`
+
+### Compiling the ODO tool
 
 Now, we're ready to compile **ODO** and its dependencies, enter:
 
@@ -109,7 +122,7 @@ If you're using a Linux virtual machine, enter the following command before runn
 
 
 
-The **ODO** executable will then appear under `ODO/bin`.
+The **ODO** executable will can be found under `ODO/bin`.
 
 For running the tool, enter:
 
