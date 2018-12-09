@@ -15,12 +15,14 @@ find_library(IPOPT_LIBRARY
 	libipopt.dylib
 	HINTS ext_lib/Ipopt/lib
 	HINTS /usr/local/lib
+	HINTS /usr/lib
 	HINTS ${IPOPT_ROOT_DIR}/lib
 )
 elseif(UNIX)
 find_library(IPOPT_LIBRARY
 	libipopt.so
 	HINTS /usr/local/lib
+	HINTS /usr/lib
 	HINTS ext_lib/Ipopt/lib
 	HINTS ${IPOPT_ROOT_DIR}/lib
 )
