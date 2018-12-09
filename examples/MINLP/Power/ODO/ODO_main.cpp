@@ -131,7 +131,7 @@ int main (int argc, char * argv[])
     }
     else {
         solver ACUC(*ROMDST,ipopt);
-        return_status = ACUC.run(output=5, relax = false, tol = 1e-6);
+        return_status = ACUC.run(output=5, relax = false, tol = 1e-6, 1e-6, "mumps");
         ROMDST->print_solution(false);
         return 0;
         if (return_status != 100) {

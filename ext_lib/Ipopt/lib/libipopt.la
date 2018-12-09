@@ -5,21 +5,21 @@
 # It is necessary for linking the library.
 
 # The name that we can dlopen(3).
-dlname='libipopt.so.1'
+dlname='libipopt.1.dylib'
 
 # Names of this library.
-library_names='libipopt.so.1.10.9 libipopt.so.1 libipopt.so'
+library_names='libipopt.1.10.10.dylib libipopt.1.dylib libipopt.dylib'
 
 # The name of the static archive.
-old_library=''
+old_library='libipopt.a'
 
 # Libraries that this one depends upon.
-dependency_libs=' /home/hlh/3.12.9/build/lib/libcoinhsl.la /home/hlh/3.12.9/build/lib/libcoinmetis.la /home/hlh/3.12.9/build/lib/libcoinlapack.la /home/hlh/3.12.9/build/lib/libcoinblas.la -lgfortran -lquadmath -ldl'
+dependency_libs=' -L/workspace/destdir/lib /workspace/destdir/lib/libcoinmumps.la -L/opt/x86_64-apple-darwin14/lib/gcc/x86_64-apple-darwin14/7.3.0 -L/opt/x86_64-apple-darwin14/lib/gcc/x86_64-apple-darwin14/7.3.0/../../../../x86_64-apple-darwin14/lib /workspace/destdir/lib/libcoinmetis.la /workspace/destdir/lib/libcoinlapack.la /opt/x86_64-apple-darwin14/x86_64-apple-darwin14/lib/libgfortran.la /workspace/destdir/lib/libcoinblas.la /opt/x86_64-apple-darwin14/x86_64-apple-darwin14/lib/libgfortran.la /opt/x86_64-apple-darwin14/x86_64-apple-darwin14/lib/libquadmath.la -lSystem /opt/x86_64-apple-darwin14/x86_64-apple-darwin14/lib/libquadmath.la -lm -ldl'
 
 # Version information for libipopt.
 current=11
 age=10
-revision=9
+revision=10
 
 # Is this an already installed library?
 installed=yes
@@ -32,4 +32,4 @@ dlopen=''
 dlpreopen=''
 
 # Directory that this library needs to be installed in:
-libdir='/home/hlh/3.12.9/build/lib'
+libdir='/workspace/destdir/lib'
