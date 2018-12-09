@@ -6,6 +6,9 @@ find_path(IPOPT_INCLUDE_DIR
 	NAMES IpNLP.hpp
 	HINTS ext_lib/Ipopt/include/coin
 	HINTS /usr/local/include/coin
+	HINTS /usr/local/include
+	HINTS /usr/include/coin
+	HINTS /usr/include
 	HINTS ${IPOPT_ROOT_DIR}/include/coin
 	HINTS ${IPOPT_ROOT_DIR}/include
 )
