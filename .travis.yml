@@ -14,7 +14,7 @@ addons:
    - g++-7
 before_install:
 - sudo apt-get install gfortran
-- sudo apt-get install libgfortran3
+- sudo apt-get install libgfortran4
 - export CC=/usr/bin/gcc-7  
 - export CXX=/usr/bin/g++-7
 - echo $LANG
