@@ -20,8 +20,8 @@ RUN apt-get update \ && apt-get install -y \
                 && apt-get install -y cmake=3.5.1-1ubuntu3 \
                 && apt-get install -y \
                     gcc-6 g++-6 gcc-6-base \
-                && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-6 100 \
-                && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-6 100
+                && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-6 \
+                && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-6
 # Setup scripts for LibreOffice Online
 ADD /scripts/install-libreoffice.sh /
 ADD /scripts/start-libreoffice.sh /
