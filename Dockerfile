@@ -1,15 +1,17 @@
-FROM ubuntu:15.04
+FROM ubuntu:16.04
 ENV DEBIAN_FRONTEND noninteractive
 COPY ./* ./
 EXPOSE 8000
+# Environment variables
+ENV domain localhost
+ENV LC_CTYPE en_US.UTF-8
 
-RUN apt-get update && apt-get -y -q install libreoffice libreoffice-writer ure libreoffice-java-common libreoffice-core libreoffice-common openjdk-7-jre fonts-opensymbol hyphen-fr hyphen-de hyphen-en-us hyphen-it hyphen-ru fonts-dejavu fonts-dejavu-core fonts-dejavu-extra fonts-droid fonts-dustin fonts-f500 fonts-fanwood fonts-freefont-ttf fonts-liberation fonts-lmodern fonts-lyx fonts-sil-gentium fonts-texgyre fonts-tlwg-purisa && apt-get -q -y remove libreoffice-gnome
-EXPOSE 8997
-RUN adduser --home=/opt/libreoffice --disabled-password --gecos "" --shell=/bin/bash libreoffice
-# replace default setup with a one disabling logos by default
-ADD sofficerc /etc/libreoffice/sofficerc
-ADD startoo.sh /opt/libreoffice/startoo.sh
-VOLUME ["/tmp"]
-RUN chmod +x /opt/libreoffice/startoo.sh
+# Setup scripts for LibreOffice Online
+ADD /scripts/install-libreoffice.sh /
+ADD /scripts/start-libreoffice.sh /
+RUN bash install-libreoffice.sh
 
-ENTRYPOINT ["/opt/libreoffice/startoo.sh"]
+EXPOSE 9980
+
+# Entry point
+CMD bash start-libreoffice.sh
