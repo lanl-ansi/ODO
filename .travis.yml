@@ -49,7 +49,8 @@ before_install:
 - mkdir build && cd build && cmake ..
 script:
 - make -j5
-- "../bin/odo"
+- cd ..
+- "./bin/odo"
 
 after_success:
 - docker login -u $DOCKER_USER -p $DOCKER_PASS
