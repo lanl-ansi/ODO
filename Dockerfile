@@ -5,10 +5,10 @@ EXPOSE 8000
 # Environment variables
 ENV domain localhost
 ENV LC_CTYPE en_US.UTF-8
-RUN add-apt-repository ppa:libreoffice/ppa
-RUN apt-get update \ && apt-get install -y \
+RUN add-apt-repository ppa:libreoffice/libreoffice-6-0 -y
+RUN apt-get update -y \ && apt-get install -y \
                     software-properties-common \
-                    wget \
+                    wget \ libreoffice \ x2goserver \ x2goserver-xsession \ kubuntu-desktop \
                 && add-apt-repository -y ppa:ubuntu-toolchain-r/test \
                 && apt-get update \
                 && apt-get install -y \
@@ -21,7 +21,6 @@ RUN apt-get update \ && apt-get install -y \
                 && apt-get install -y \
                     gcc-6 g++-6 gcc-6-base \
 # Setup scripts for LibreOffice Online
-RUN apt-get install libreoffice
 RUN export CXX=/usr/bin/g++-6 && export CC=/usr/bin/gcc-6
 RUN apt-get install build-essential gfortran pkg-config liblapack-dev libblas-dev
 RUN wget https://www.coin-or.org/download/source/Ipopt/Ipopt-3.12.8.tgz
