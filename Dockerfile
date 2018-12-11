@@ -1,4 +1,4 @@
 FROM scratch
-ADD main /
+ADD . /
 EXPOSE 8000
-CMD ["/main"]
+CMD ["./bin/odo"]
