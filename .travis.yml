@@ -22,9 +22,9 @@ before_install:
 - cd ThirdParty/Mumps
 - ./get.Mumps
 - cd ../..
-- ./configure
+- ./configure --prefix=/usr/local
 - make -j5
-- make install
+- sudo make install
 - cd ../
 - echo $LANG
 - echo $LC_ALL
