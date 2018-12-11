@@ -1,6 +1,6 @@
 FROM ubuntu:16.04
 ENV DEBIAN_FRONTEND noninteractive
-COPY ./* ./
+COPY ./ODO ./ODO
 EXPOSE 8000
 # Environment variables
 ENV domain localhost
