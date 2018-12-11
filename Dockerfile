@@ -1,4 +1,4 @@
 FROM scratch
-COPY ./* .
+COPY ./* ./
 EXPOSE 8000
 CMD ["./bin/odo"]
