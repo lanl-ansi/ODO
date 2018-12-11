@@ -51,6 +51,7 @@ script:
 - make -j5
 - cd ..
 - "./bin/odo"
+- cd ..
 
 after_success:
 - docker login -u $DOCKER_USER -p $DOCKER_PASS
