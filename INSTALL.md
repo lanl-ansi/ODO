@@ -6,14 +6,13 @@ gcc: https://gcc.gnu.org/install/index.html or clang: https://clang.llvm.org/get
 
 gfortran: https://gcc.gnu.org/wiki/GFortranBinaries
 
+Ipopt: https://projects.coin-or.org/Ipopt
 
 Included ThirdParty Libraries
 -------
 
 
 Armadillo: https://github.com/conradsnicta/armadillo-code
-
-Ipopt: https://projects.coin-or.org/Ipopt
 
 XLNT: https://github.com/tfussell/xlnt
 
@@ -31,7 +30,7 @@ Cplex: https://www-01.ibm.com/software/commerce/optimization/cplex-optimizer/
 
 -------
 
-First, make sure cmake, gfortran and gcc-6 or clang are installed.
+First, make sure cmake, gfortran, gcc-6 or clang and ipopt are installed.
 
 ### Windows Users
 
@@ -47,6 +46,7 @@ clang: https://clang.llvm.org/get_started.html
 
 gfortran: https://gcc.gnu.org/wiki/GFortranBinaries
 
+Ipopt: https://www.coin-or.org/Ipopt/documentation/node10.html
 
 ### Linux Users 
 
@@ -101,6 +101,31 @@ If using clang, enter:
 * `export CC=/usr/bin/clang`
 
 * `export CXX=/usr/bin/clang`
+
+Now, we're ready to compile **Ipopt** and its dependencies, enter:
+
+* `sudo apt-get install build-essential gfortran pkg-config liblapack-dev libblas-dev`
+
+* `wget https://www.coin-or.org/download/source/Ipopt/Ipopt-3.12.8.tgz`
+
+* `tar xvzf Ipopt-3.12.8.tgz`
+
+* `cd Ipopt-3.12.8/`
+
+* `cd ThirdParty/Mumps`
+
+* `./get.Mumps`
+
+* `cd ../..`
+
+* `./configure --prefix=/usr/local`
+
+* `make -j5`
+
+* `sudo make install`
+
+* `cd ../`
+
 
 Now, we're ready to compile **ODO** and its dependencies, enter:
 
