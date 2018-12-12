@@ -6,18 +6,18 @@ EXPOSE 8000
 ENV domain localhost
 ENV LC_CTYPE en_US.UTF-8
 RUN apt-get update -y \ && apt-get install -y \ software-properties-common \
-                    \ x2goserver \ x2goserver-xsession \ kubuntu-desktop \
-#RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y \
+                    \ x2goserver \ x2goserver-xsession \ kubuntu-desktop
+RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y
 RUN apt-get update -y \ && apt-get install -y \
                     make \
                     git \
                     curl \
                     vim \
-                    vim-gnome \
-RUN apt-get install -y \ cmake=3.5.1-1ubuntu3 \
-RUN apt-get install -y \ gcc-6 \ g++-6 \ gcc-6-base \
+                    vim-gnome
+RUN apt-get install -y \ cmake=3.5.1-1ubuntu3
+RUN apt-get install -y \ gcc-6 \ g++-6 \ gcc-6-base
 RUN apt-get update -y
-#RUN add-apt-repository ppa:libreoffice/libreoffice-6-0 -y \
+RUN add-apt-repository ppa:libreoffice/libreoffice-6-0 -y
 # Setup scripts for LibreOffice Online
 RUN export CXX=/usr/bin/g++-6 && export CC=/usr/bin/gcc-6
 RUN apt-get install build-essential gfortran pkg-config liblapack-dev libblas-dev
