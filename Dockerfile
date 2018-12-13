@@ -7,7 +7,7 @@ ENV domain localhost
 ENV LC_CTYPE en_US.UTF-8
 #RUN apt-get update -y && apt-get install -y \ software-properties-common \ x2goserver \ x2goserver-xsession \ kubuntu-desktop
 RUN apt-get update -y
-RUN apt-get install -y software-properties-common
+RUN apt-get install -y build-essential software-properties-common
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y
 RUN apt-get update -y && apt-get install -y \
                     make \
@@ -16,7 +16,7 @@ RUN apt-get update -y && apt-get install -y \
                     vim \
                     vim-gnome
 RUN apt-get install -y cmake
-RUN apt-get install -y \ gcc-6 \ g++-6 \ gcc-6-base
+RUN apt-get install gcc-6 g++-6 -y && \
 RUN apt-get update -y
 RUN add-apt-repository ppa:libreoffice/libreoffice-6-0 -y
 # Setup scripts for LibreOffice Online
