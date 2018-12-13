@@ -15,7 +15,7 @@ RUN apt-get update -y && apt-get install -y \
                     curl \
                     vim \
                     vim-gnome
-RUN apt-get install -y \ cmake=3.5.1-1ubuntu3
+RUN apt-get install -y cmake
 RUN apt-get install -y \ gcc-6 \ g++-6 \ gcc-6-base
 RUN apt-get update -y
 RUN add-apt-repository ppa:libreoffice/libreoffice-6-0 -y
