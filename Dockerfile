@@ -16,7 +16,7 @@ RUN apt-get update -y && apt-get install -y \
                     vim \
                     vim-gnome
 RUN apt-get install -y cmake
-RUN apt-get install gcc-6 g++-6 -y && \
+RUN apt-get install gcc-6 g++-6 -y
 RUN apt-get update -y
 RUN add-apt-repository ppa:libreoffice/libreoffice-6-0 -y
 # Setup scripts for LibreOffice Online
