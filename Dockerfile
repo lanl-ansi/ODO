@@ -5,7 +5,8 @@ EXPOSE 8000
 # Environment variables
 ENV domain localhost
 ENV LC_CTYPE en_US.UTF-8
-RUN apt-get update -y && apt-get install -y \ software-properties-common \ x2goserver \ x2goserver-xsession \ kubuntu-desktop
+#RUN apt-get update -y && apt-get install -y \ software-properties-common \ x2goserver \ x2goserver-xsession \ kubuntu-desktop
+RUN apt-get update -y
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y
 RUN apt-get update -y && apt-get install -y \
                     make \
