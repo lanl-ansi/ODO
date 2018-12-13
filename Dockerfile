@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM ubuntu:14.04
 ENV DEBIAN_FRONTEND noninteractive
 COPY ./ODO ./ODO
 EXPOSE 8000
@@ -7,6 +7,7 @@ ENV domain localhost
 ENV LC_CTYPE en_US.UTF-8
 #RUN apt-get update -y && apt-get install -y \ software-properties-common \ x2goserver \ x2goserver-xsession \ kubuntu-desktop
 RUN apt-get update -y
+RUN apt-get install -y software-properties-common
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test -y
 RUN apt-get update -y && apt-get install -y \
                     make \
