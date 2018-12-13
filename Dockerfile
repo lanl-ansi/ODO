@@ -21,7 +21,7 @@ RUN apt-get update -y
 RUN add-apt-repository ppa:libreoffice/libreoffice-6-0 -y
 # Setup scripts for LibreOffice Online
 RUN export CXX=/usr/bin/g++-6 && export CC=/usr/bin/gcc-6
-RUN apt-get install -y build-essential gfortran pkg-config liblapack-dev libblas-dev
+RUN apt-get install -y gfortran pkg-config liblapack-dev libblas-dev wget
 RUN wget https://www.coin-or.org/download/source/Ipopt/Ipopt-3.12.8.tgz
 RUN tar xvzf Ipopt-3.12.8.tgz
 RUN cd Ipopt-3.12.8/ && cd ThirdParty/Mumps && ./get.Mumps && cd ../.. && ./configure --prefix=/usr/local && make -j5 && make install && pwd && cd ../ODO && cd ./ext_lib/xlnt-1.3.0 && mkdir build && cd build && cmake .. && make -j5 && cd ../../../ && mkdir build && cd build && cmake ..
