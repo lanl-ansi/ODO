@@ -15,14 +15,16 @@ RUN apt-get update -y && apt-get install -y \
                     curl \
                     vim \
                     vim-gnome
-RUN add-apt-repository ppa:george-edison55/cmake-3.x -y
-RUN apt-get install -y cmake
 RUN apt-get install gcc-6 g++-6 -y
 RUN apt-get update -y
 RUN add-apt-repository ppa:libreoffice/libreoffice-6-0 -y
 # Setup scripts for LibreOffice Online
 RUN export CXX=/usr/bin/g++-6 && export CC=/usr/bin/gcc-6
 RUN apt-get install -y gfortran pkg-config liblapack-dev libblas-dev wget
+RUN wget http://www.cmake.org/files/v3.2/cmake-3.2.2.tar.gz
+RUN tar xf cmake-3.2.2.tar.gz
+RUN cd cmake-3.2.2
+RUN ./configure --prefix=/usr/local && make -j5 && make install && cd .. && pwd
 RUN wget https://www.coin-or.org/download/source/Ipopt/Ipopt-3.12.8.tgz
 RUN tar xvzf Ipopt-3.12.8.tgz
 RUN cd Ipopt-3.12.8/ && cd ThirdParty/Mumps && ./get.Mumps && cd ../.. && ./configure --prefix=/usr/local && make -j5 && make install && pwd
