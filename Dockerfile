@@ -15,6 +15,7 @@ RUN apt-get update -y && apt-get install -y \
                     curl \
                     vim \
                     vim-gnome
+RUN add-apt-repository ppa:george-edison55/cmake-3.x -y
 RUN apt-get install -y cmake
 RUN apt-get install gcc-6 g++-6 -y
 RUN apt-get update -y
