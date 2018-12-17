@@ -37,7 +37,7 @@ if (NOT Mosek)
     list(REMOVE_ITEM SOURCES ${PROJECT_SOURCE_DIR}/src/MosekProgram.cpp)
 endif()
 
-set(CPP_OPTION_PARSER option_parser)
+#set(CPP_OPTION_PARSER option_parser)
 
 add_library(gravity STATIC ${SOURCES} ${HEADERS})
 target_link_libraries(gravity ${CPLEX_LIBRARIES} ${GUROBI_LIBRARIES} ${IPOPT_LIBRARIES} ${BONMIN_LIBRARIES} ${SDPA_LIBRARIES} ${MOSEK_LIBRARIES} ${XLNT_LIBRARIES} ${CPP_OPTION_PARSER})
