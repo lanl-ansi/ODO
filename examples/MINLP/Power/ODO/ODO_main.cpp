@@ -42,7 +42,6 @@ int main (int argc, char * argv[])
 #elif defined(__APPLE__)
     downl_json_cmd = string("curl \"" + Json_str + "\" > Net.json");
     downl_xls_cmd = string("curl \"" + Xls_str + "\" > Invest.xlsx");
-    cout << downl_xls_cmd;
 #elif defined(__linux__)
     downl_json_cmd = string("wget -O Net.json \"" + Json_str + "\"");
     downl_xls_cmd = string("wget -O Invest.xlsx \"" + Xls_str + "\"");
