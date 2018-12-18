@@ -21,12 +21,17 @@
 using namespace std;
 using namespace gravity;
 
+bool file_exists (const std::string& name) {
+    ifstream f(name.c_str());
+    return f.good();
+}
+
 
 int main (int argc, char * argv[])
 {
     string downl_json_cmd, downl_xls_cmd;
     string Json_str, Xls_str;
-    string Json = "Net.json", Invest = "Invest.xlsx", mtype = "ACPOL";
+    string Json, Invest, mtype = "ACPOL";
     string solver_str="ipopt", default_str="no";
     int output = 0;
     bool relax = false, use_cplex = false, use_gurobi = false, default_args=false;
@@ -52,16 +57,19 @@ int main (int argc, char * argv[])
     if(!correct_parsing){
         return EXIT_FAILURE;
     }
-    
+    bool changed_input = false;
     Invest = opt["i"];
     Json = opt["j"];
     mtype = opt["m"];
     solver_str = opt["s"];
     default_str = opt["d"];
-    if (default_str.compare("yes")==0) {
+    if (opt["j"].empty() && default_str.compare("yes")==0) {
         default_args = true;
-        cout << "Using default arguments for input files: https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json and https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx" << endl;
+        cout << "Using default arguments for Json input file: https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json" << endl;
         Json_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json";
+    }
+    if (opt["i"].empty() && default_str.compare("yes")==0) {
+        cout << "Using default arguments for Excel input file: https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx" << endl;
         Xls_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx";
     }
     if (solver_str.compare("gurobi")==0) {
@@ -79,15 +87,25 @@ int main (int argc, char * argv[])
         exit(0);
     }
     if (!default_args) {
-        cout << " Please enter the url for the Json file (hit enter to use the default url https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json)\n";
-        getline(cin, Json_str);
-        if (Json_str.empty()) {
-            Json_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json";
+        if (opt["j"].empty()){
+            cout << " Please enter the url for the Json file (hit enter to use the default url https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json)\n";
+            getline(cin, Json_str);
+            if (Json_str.empty()) {
+                Json_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json";
+            }
+            else {
+                changed_input = true;
+            }
         }
-        cout << " Please enter the url for the Excel file (hit enter to use the default url https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx)\n";
-        getline(cin, Xls_str);
-        if (Xls_str.empty()) {
-            Xls_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx";
+        if (opt["i"].empty()){
+            cout << " Please enter the url for the Excel file (hit enter to use the default url https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx)\n";
+            getline(cin, Xls_str);
+            if (Xls_str.empty()) {
+                Xls_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx";
+            }
+            else {
+                changed_input = true;
+            }
         }
     }
 #if defined(_WIN32)
@@ -100,8 +118,18 @@ int main (int argc, char * argv[])
     downl_json_cmd = string("wget -O Net.json \"" + Json_str + "\"");
     downl_xls_cmd = string("wget -O Invest.xlsx \"" + Xls_str + "\"");
 #endif
-    system(downl_json_cmd.c_str());
-    system(downl_xls_cmd.c_str());
+    if (opt["j"].empty() && (changed_input || !file_exists("Net.json"))) {
+        system(downl_json_cmd.c_str());
+    }
+    if (opt["i"].empty() && (changed_input || !file_exists("Invest.xlsx"))) {
+        system(downl_xls_cmd.c_str());
+    }
+    if(Json.empty()){
+        Json = "Net.json";
+    }
+    if(Invest.empty()){
+        Invest = "Invest.xlsx";
+    }
     PowerNet grid;
     PowerModelType pmt = LDISTF;
     if(mtype.compare("DISTF")==0) pmt = DISTF;
