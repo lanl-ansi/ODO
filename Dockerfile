@@ -23,9 +23,9 @@ RUN apt-get install -y gfortran pkg-config liblapack-dev libblas-dev wget
 RUN wget http://www.cmake.org/files/v3.2/cmake-3.2.2.tar.gz
 RUN tar xf cmake-3.2.2.tar.gz
 RUN cd cmake-3.2.2 && pwd && ls && ./configure --prefix=/usr/local && make -j5 && make install && cd .. && pwd
-RUN wget --no-check-certificate https://www.coin-or.org/download/source/Ipopt/Ipopt-3.12.8.tgz 
-RUN tar xvzf Ipopt-3.12.8.tgz
-RUN cd Ipopt-3.12.8/ && cd ThirdParty/Mumps && ./get.Mumps && cd ../.. && ./configure --prefix=/usr/local && make -j5 && make install && pwd
+RUN wget --no-check-certificate https://www.coin-or.org/download/source/Ipopt/Ipopt-3.12.12.tgz 
+RUN tar xvzf Ipopt-3.12.12.tgz
+RUN cd Ipopt-3.12.12/ && cd ThirdParty/Mumps && ./get.Mumps && cd ../.. && ./configure --prefix=/usr/local && make -j5 && make install && pwd
 RUN cd ../ODO && ls
 RUN cd ../ODO/ext_lib/xlnt-1.3.0 && export CXX=/usr/bin/g++-6 && export CC=/usr/bin/gcc-6 && cd build && rm -fr * && cmake --prefix=/usr/local .. && make -j5 && make install && cd ../../../ && cd build && rm -fr * && cmake ..
 
