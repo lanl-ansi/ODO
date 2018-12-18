@@ -60,9 +60,9 @@ int main (int argc, char * argv[])
     default_str = opt["d"];
     if (default_str.compare("yes")==0) {
         default_args = true;
-    }
-    else{
         cout << "Using default arguments for input files: https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json and https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx" << endl;
+        Json_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json";
+        Xls_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx";
     }
     if (solver_str.compare("gurobi")==0) {
         use_gurobi = true;
@@ -89,19 +89,19 @@ int main (int argc, char * argv[])
         if (Xls_str.empty()) {
             Xls_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx";
         }
-    #if defined(_WIN32)
-        downl_json_cmd = string("wget -O Net.json" + Json_str);
-        downl_xls_cmd = string("wget -O Invest.xlsx \"https://github.com/lanl-ansi/ODO/raw/master/data_sets/Power/ODO_INPUT.xlsx\"");
-    #elif defined(__APPLE__)
-        downl_json_cmd = string("curl \"" + Json_str + "\" > Net.json");
-        downl_xls_cmd = string("curl \"" + Xls_str + "\" > Invest.xlsx");
-    #elif defined(__linux__)
-        downl_json_cmd = string("wget -O Net.json \"" + Json_str + "\"");
-        downl_xls_cmd = string("wget -O Invest.xlsx \"" + Xls_str + "\"");
-    #endif
-        system(downl_json_cmd.c_str());
-        system(downl_xls_cmd.c_str());
     }
+#if defined(_WIN32)
+    downl_json_cmd = string("wget -O Net.json" + Json_str);
+    downl_xls_cmd = string("wget -O Invest.xlsx \"https://github.com/lanl-ansi/ODO/raw/master/data_sets/Power/ODO_INPUT.xlsx\"");
+#elif defined(__APPLE__)
+    downl_json_cmd = string("curl \"" + Json_str + "\" > Net.json");
+    downl_xls_cmd = string("curl \"" + Xls_str + "\" > Invest.xlsx");
+#elif defined(__linux__)
+    downl_json_cmd = string("wget -O Net.json \"" + Json_str + "\"");
+    downl_xls_cmd = string("wget -O Invest.xlsx \"" + Xls_str + "\"");
+#endif
+    system(downl_json_cmd.c_str());
+    system(downl_xls_cmd.c_str());
     PowerNet grid;
     PowerModelType pmt = LDISTF;
     if(mtype.compare("DISTF")==0) pmt = DISTF;
