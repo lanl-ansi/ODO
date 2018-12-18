@@ -27,7 +27,7 @@ RUN wget --tries=40 --retry-connrefused --waitretry=1 --no-check-certificate htt
 RUN tar xvzf Ipopt-3.12.12.tgz
 RUN cd Ipopt-3.12.12/ && cd ThirdParty/Mumps && ./get.Mumps && cd ../.. && ./configure --prefix=/usr/local && make -j5 && make install && pwd
 RUN cd ../ODO && ls
-RUN cd ../ODO/ext_lib/xlnt-1.3.0 && export CXX=/usr/bin/g++-6 && export CC=/usr/bin/gcc-6 && cd build && rm -fr * && cmake --prefix=/usr/local .. && make -j5 && make install && cd ../../../ && cd build && rm -fr * && cmake ..
+RUN cd ../ODO/ext_lib/xlnt-1.3.0 && export CXX=/usr/bin/g++-6 && export CC=/usr/bin/gcc-6 && cd build && rm -fr * && cmake --prefix=/usr/local .. && make -j5 && make install && cd ../../cpp_option_parser && cmake && make && cp liboption_parser.so /usr/local/lib && cd ../.. && cd build && rm -fr * && cmake ..
 
 EXPOSE 9980
 
