@@ -15,6 +15,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <optionParser.hpp>
+#include <cstdlib>
+#include <iostream>
 
 using namespace std;
 using namespace gravity;
@@ -22,7 +24,32 @@ using namespace gravity;
 
 int main (int argc, char * argv[])
 {
-    string fname = string(prj_dir)+"/data_sets/Power/ODO_INPUT.xlsx", mtype = "ACPOL";
+    string downl_json_cmd, downl_xls_cmd;
+    cout << " Please enter the url for the Json file (hit enter to use the default url https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json)\n";
+    string Json_str, Xls_str;
+    getline(cin, Json_str);
+    if (Json_str.empty()) {
+        Json_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json";
+    }
+    cout << " Please enter the url for the Excel file (hit enter to use the default url https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx)\n";
+    getline(cin, Xls_str);
+    if (Xls_str.empty()) {
+        Xls_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx";
+    }
+#if defined(_WIN32)
+    downl_json_cmd = string("wget -O Net.json" + Json_str);
+    downl_xls_cmd = string("wget -O Invest.xlsx \"https://github.com/lanl-ansi/ODO/raw/master/data_sets/Power/ODO_INPUT.xlsx\"");
+#elif defined(__APPLE__)
+    downl_json_cmd = string("curl \"" + Json_str + "\" > Net.json");
+    downl_xls_cmd = string("curl \"" + Xls_str + "\" > Invest.xlsx");
+    cout << downl_xls_cmd;
+#elif defined(__linux__)
+    downl_json_cmd = string("wget -O Net.json \"" + Json_str + "\"");
+    downl_xls_cmd = string("wget -O Invest.xlsx \"" + Xls_str + "\"");
+#endif
+    system(downl_json_cmd.c_str());
+    system(downl_xls_cmd.c_str());
+    string Json = "Net.json", Invest = "Invest.xlsx", mtype = "ACPOL";
     string solver_str="ipopt";
     int output = 0;
     bool relax = false, use_cplex = false, use_gurobi = false;
@@ -32,7 +59,8 @@ int main (int argc, char * argv[])
     /** create a OptionParser with options */
     op::OptionParser opt;
     opt.add_option("h", "help", "shows option help"); // no default value means boolean options, which default value is false
-    opt.add_option("f", "file", "Input file name (def. ../data_sets/Power/nesta_case5_pjm.m)", fname );
+    opt.add_option("i", "invest", "Investment options input file name (def. Invest.xlsx)", Invest );
+    opt.add_option("j", "json", "Json input file name (def. Net.json)", Json );
     opt.add_option("l", "log", "Log level (def. 0)", log_level );
     opt.add_option("t", "time", "time in hours (def. 1)", nb_hours );
     opt.add_option("m", "model", "power flow model: ACPOL/ACRECT/DISTFLOW/LINDISTFLOW (def. ACPOL)", mtype );
@@ -45,7 +73,8 @@ int main (int argc, char * argv[])
         return EXIT_FAILURE;
     }
     
-    fname = opt["f"];
+    Invest = opt["i"];
+    Json = opt["j"];
     mtype = opt["m"];
     solver_str = opt["s"];
     if (solver_str.compare("gurobi")==0) {
@@ -78,10 +107,10 @@ int main (int argc, char * argv[])
         DebugOn("Using Convex Distflow model\n");
     }
     
-    grid.readJSON(string(prj_dir)+"/data_sets/Power/IEEE13.json");
-    auto stat = grid.readODO(fname);
+    grid.readJSON(Json);
+    auto stat = grid.readODO(Invest);
     if (stat==-1) {
-        cerr << "Error reading Excel File, Exising" << endl;
+        cerr << "Error reading Excel File, Exiting" << endl;
         return -1;
     }
     
