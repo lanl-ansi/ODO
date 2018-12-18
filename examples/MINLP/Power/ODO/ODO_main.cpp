@@ -25,36 +25,16 @@ using namespace gravity;
 int main (int argc, char * argv[])
 {
     string downl_json_cmd, downl_xls_cmd;
-    cout << " Please enter the url for the Json file (hit enter to use the default url https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json)\n";
     string Json_str, Xls_str;
-    getline(cin, Json_str);
-    if (Json_str.empty()) {
-        Json_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json";
-    }
-    cout << " Please enter the url for the Excel file (hit enter to use the default url https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx)\n";
-    getline(cin, Xls_str);
-    if (Xls_str.empty()) {
-        Xls_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx";
-    }
-#if defined(_WIN32)
-    downl_json_cmd = string("wget -O Net.json" + Json_str);
-    downl_xls_cmd = string("wget -O Invest.xlsx \"https://github.com/lanl-ansi/ODO/raw/master/data_sets/Power/ODO_INPUT.xlsx\"");
-#elif defined(__APPLE__)
-    downl_json_cmd = string("curl \"" + Json_str + "\" > Net.json");
-    downl_xls_cmd = string("curl \"" + Xls_str + "\" > Invest.xlsx");
-#elif defined(__linux__)
-    downl_json_cmd = string("wget -O Net.json \"" + Json_str + "\"");
-    downl_xls_cmd = string("wget -O Invest.xlsx \"" + Xls_str + "\"");
-#endif
-    system(downl_json_cmd.c_str());
-    system(downl_xls_cmd.c_str());
     string Json = "Net.json", Invest = "Invest.xlsx", mtype = "ACPOL";
-    string solver_str="ipopt";
+    string solver_str="ipopt", default_str="no";
     int output = 0;
-    bool relax = false, use_cplex = false, use_gurobi = false;
+    bool relax = false, use_cplex = false, use_gurobi = false, default_args=false;
     double tol = 1e-6;
     string mehrotra = "no", log_level="0", nb_hours="1";
-    
+    double solver_time_end, total_time_end, solve_time, cont_solve_start, cont_solve_end, cont_solve_time, model_build_time = -1, total_time = -1;
+    double total_time_start = get_wall_time();
+
     /** create a OptionParser with options */
     op::OptionParser opt;
     opt.add_option("h", "help", "shows option help"); // no default value means boolean options, which default value is false
@@ -64,6 +44,7 @@ int main (int argc, char * argv[])
     opt.add_option("t", "time", "time in hours (def. 1)", nb_hours );
     opt.add_option("m", "model", "power flow model: ACPOL/ACRECT/DISTFLOW/LINDISTFLOW (def. ACPOL)", mtype );
     opt.add_option("s", "solver", "Solvers: ipopt/cplex/gurobi, default = ipopt", solver_str);
+    opt.add_option("d", "default", "Use default arguments for input files: yes/no, default = no", default_str);
     
     /** parse the options and verify that all went well. If not, errors and help will be shown */
     bool correct_parsing = opt.parse_options(argc, argv);
@@ -76,6 +57,13 @@ int main (int argc, char * argv[])
     Json = opt["j"];
     mtype = opt["m"];
     solver_str = opt["s"];
+    default_str = opt["d"];
+    if (default_str.compare("yes")==0) {
+        default_args = true;
+    }
+    else{
+        cout << "Using default arguments for input files: https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json and https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx" << endl;
+    }
     if (solver_str.compare("gurobi")==0) {
         use_gurobi = true;
     }
@@ -90,8 +78,30 @@ int main (int argc, char * argv[])
         opt.show_help();
         exit(0);
     }
-    double solver_time_end, total_time_end, solve_time, cont_solve_start, cont_solve_end, cont_solve_time, model_build_time = -1, total_time = -1;
-    double total_time_start = get_wall_time();
+    if (!default_args) {
+        cout << " Please enter the url for the Json file (hit enter to use the default url https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json)\n";
+        getline(cin, Json_str);
+        if (Json_str.empty()) {
+            Json_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json";
+        }
+        cout << " Please enter the url for the Excel file (hit enter to use the default url https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx)\n";
+        getline(cin, Xls_str);
+        if (Xls_str.empty()) {
+            Xls_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx";
+        }
+    #if defined(_WIN32)
+        downl_json_cmd = string("wget -O Net.json" + Json_str);
+        downl_xls_cmd = string("wget -O Invest.xlsx \"https://github.com/lanl-ansi/ODO/raw/master/data_sets/Power/ODO_INPUT.xlsx\"");
+    #elif defined(__APPLE__)
+        downl_json_cmd = string("curl \"" + Json_str + "\" > Net.json");
+        downl_xls_cmd = string("curl \"" + Xls_str + "\" > Invest.xlsx");
+    #elif defined(__linux__)
+        downl_json_cmd = string("wget -O Net.json \"" + Json_str + "\"");
+        downl_xls_cmd = string("wget -O Invest.xlsx \"" + Xls_str + "\"");
+    #endif
+        system(downl_json_cmd.c_str());
+        system(downl_xls_cmd.c_str());
+    }
     PowerNet grid;
     PowerModelType pmt = LDISTF;
     if(mtype.compare("DISTF")==0) pmt = DISTF;

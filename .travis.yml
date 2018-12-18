@@ -50,7 +50,7 @@ before_install:
 script:
 - make -j5
 - cd ..
-- "./bin/odo"
+- "./bin/odo -d yes"
 - cd ..
 
 after_success:
