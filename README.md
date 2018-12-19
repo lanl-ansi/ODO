@@ -28,6 +28,12 @@ The first file contains all the network properties including branch resistance/r
 
 The excel file allows the user to adjust investment options and setup configurations such as runtime limit, maximum number of iterations, and others.
 
+# Running in Docker
+Below is a recorded execution of a docker pull and a docker run:
+
+![cover-example](media/docker_pull.gif)
+
+![cover-example](media/Docker_run.gif)
 
 # Licence
 
