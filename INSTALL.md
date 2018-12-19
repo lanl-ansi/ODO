@@ -1,6 +1,6 @@
 # RUN IN DOCKER
 
-**ODO** is deployed on [Docker](www.docker.com) to support multiplatforms.
+**ODO** is deployed on [Docker](www.docker.com) and can run on Windows, Mac and Linux.
 
 To get the tool running, you just need to install Docker:
 
