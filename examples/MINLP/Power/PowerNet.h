@@ -256,7 +256,7 @@ public:
     void fix_investment();
     double solve_acopf(PowerModelType model=ACPOL, int output=0, double tol=1e-6);
     unique_ptr<Model> build_ROMDST(PowerModelType model=LDISTF, int output=5, double tol=1e-6, int nb_hours = 24);
-    unique_ptr<Model> build_ROMDST_3phase(PowerModelType model=LDISTF, int output=5, double tol=1e-6, int nb_hours = 24);
+    unique_ptr<Model> build_ODO_model(PowerModelType model=LDISTF, int output=5, double tol=1e-6, int nb_hours = 24);
     shared_ptr<Model> build_ROMDST_contingency(const string& name, PowerModelType model=LDISTF, int output=5, double tol=1e-6, int nb_hours = 24);
     
 };

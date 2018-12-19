@@ -3006,7 +3006,7 @@ void PowerNet::fix_investment(){
     PVt_opt = indices(_all_PV_gens,T);
 }
 
-unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, double tol, int max_nb_hours){
+unique_ptr<Model> PowerNet::build_ODO_model(PowerModelType pmt, int output, double tol, int max_nb_hours){
     /** Indices Sets */
     hours = time(1,max_nb_hours); /**< Hours */
     //        indices months = time("jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"); /**< Months */
@@ -3054,7 +3054,7 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
     
     
     /** MODEL DECLARATION */
-    unique_ptr<Model> ROMDST(new Model("ROMDST Model"));
+    unique_ptr<Model> ODO(new Model("ODO Model"));
     /** VARIABLES */
     
     
@@ -3063,7 +3063,7 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
     //    var<Real> Pv_cap("Pv_cap", 0, pv_max); /**< Real variable indicating the extra capacity of PV to be installed on bus b */
     var<Real> Pv_cap("Pv_cap", pos_); /**< Real variable indicating the extra capacity of PV to be installed on bus b */
     auto pot_pv = indices(_potential_PV_gens);
-    ROMDST->add(Pv_cap.in(pot_pv));
+    ODO->add(Pv_cap.in(pot_pv));
     //        var<Real> w_g("w_g",0,1); /**< Binary variable indicating if generator g is built on bus */
     //        var<Real> w_b("w_b",0,1); /**< Binary variable indicating if battery b is built on bus */
     //        var<Real> w_e("w_e",0,1); /**< Binary variable indicating if expansion is selected for edge e */
@@ -3080,7 +3080,7 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
     
     
     
-    ROMDST->add(w_g.in(pot_gen),w_b.in(pot_batt),w_e.in(pot_edges),w_pv.in(pot_pv));
+    ODO->add(w_g.in(pot_gen),w_b.in(pot_batt),w_e.in(pot_edges),w_pv.in(pot_pv));
     w_g.initialize_all(1);
     w_b.initialize_all(1);
     w_e.initialize_all(1);
@@ -3107,10 +3107,10 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
     var<Real> Pg_ ("Pg_", pg_min, pg_max);/**< Active power generation before losses */
     //    var<Real> Pg2("Pg2", 0, power(pg_max,2));/**< Square of Pg */
     var<Real> Pg2("Pg2", pos_);/**< Square of Pg */
-    ROMDST->add(Pg.in(Gt));
-    ROMDST->add(Pg_.in(Gt));
-    ROMDST->add(Qg.in(Gt));
-    ROMDST->add(Pg2.in(pot_Gt));
+    ODO->add(Pg.in(Gt));
+    ODO->add(Pg_.in(Gt));
+    ODO->add(Qg.in(Gt));
+    ODO->add(Pg2.in(pot_Gt));
     DebugOn("size Pg = " << Pg.get_dim() << endl);
     DebugOn("size Pg_ = " << Pg_.get_dim() << endl);
     DebugOn("size Qg = " << Qg.get_dim() << endl);
@@ -3125,7 +3125,7 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
     var<Real> Qb ("Qb", qb_min, qb_max);/**< Reactive power generation outside the battery */
     var<Real> Pb_("Pb_", pb_min, pb_max);/**< Active power generation in the battery */
     //    var<Real> Qb_("Qb_", qb_min, qb_max);/**< Reactive power generation in the battery */
-    ROMDST->add(Pb.in(Bt), Qb.in(Bt), Pb_.in(Bt));
+    ODO->add(Pb.in(Bt), Qb.in(Bt), Pb_.in(Bt));
     DebugOn("size Pb = " << Pb.get_dim() << endl);
     DebugOn("size Qb = " << Qb.get_dim() << endl);
     
@@ -3133,18 +3133,18 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
     /* PV power generation variables */
     //    var<Real> Pv("Pv", 0,pv_max);
     var<Real> Pv("Pv", pos_);
-    ROMDST->add(Pv.in(PVt));
+    ODO->add(Pv.in(PVt));
     DebugOn("size Pv = " << Pv.get_dim() << endl);
     
     /* Battery state of charge variables */
     var<Real> Sc("Sc", pos_);
-    ROMDST->add(Sc.in(Bt));
+    ODO->add(Sc.in(Bt));
     DebugOn("size Sc = " << Sc.get_dim() << endl);
     
     /* Wind power generation variables */
     var<Real> Pw("Pw", pw_min, pw_max);
     //    pw_max.print(true);
-    ROMDST->add(Pw.in(Wt));
+    ODO->add(Pw.in(Wt));
     DebugOn("size Pw = " << Pw.get_dim() << endl);
     
     /* Power flow variables */
@@ -3153,22 +3153,22 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
     var<Real> Pji("Pto", S_max);
     var<Real> Qji("Qto", S_max);
     
-    ROMDST->add(Pij.in(Et),Qij.in(Et));
+    ODO->add(Pij.in(Et),Qij.in(Et));
     DebugOn("size Pij = " << Pij.get_dim() << endl);
     if (pmt!=LDISTF) {
-        ROMDST->add(Pji.in(Et),Qji.in(Et));
+        ODO->add(Pji.in(Et),Qji.in(Et));
     }
     
     /** Voltage magnitude (squared) variables */
     var<Real> v("v", v_min, v_max);
-    ROMDST->add(v.in(Nt));
+    ODO->add(v.in(Nt));
     DebugOn("size v = " << v.get_dim() << endl);
     //    v.initialize_all(0.64);
     
     /** Power loss variables */
     var<Real> loss("loss", pos_);
     if (pmt==DISTF || pmt==CDISTF) {
-        ROMDST->add(loss.in(Nt));
+        ODO->add(loss.in(Nt));
     }
     
     /** OBJECTIVE FUNCTION */
@@ -3181,7 +3181,7 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
     obj += product(pv_capcost.in(pot_pv), w_pv.in(pot_pv));
     obj += product(pv_varcost.in(pot_pv), Pv_cap.in(pot_pv));
     obj *= 1e-3;
-    ROMDST->min(obj);
+    ODO->min(obj);
     obj.print_expanded();
     
     /** CONSTRAINTS **/
@@ -3189,7 +3189,7 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
     /** Voltage at source bus **/
     Constraint fix_voltage("fix_voltage");
     fix_voltage += v - vm_;
-    ROMDST->add(fix_voltage.in(indices(indices(ref_bus),phases,T))==0);
+    ODO->add(fix_voltage.in(indices(indices(ref_bus),phases,T))==0);
     
     /** FLOW CONSERVATION **/
     
@@ -3205,8 +3205,8 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
         KCL_P  = sum(Pij.out_arcs()) + sum(Pji.in_arcs()) + pl - sum(Pg.in_gens())- sum(Pb.in_bats()) - sum(Pw.in_wind()) - sum(Pv.in_pv());
         KCL_Q  = sum(Qij.out_arcs()) + sum(Qji.in_arcs()) + ql - sum(Qg.in_gens()) - sum(Qb.in_bats());
     }
-    ROMDST->add(KCL_P.in(nodes, indices(phases,T)) == 0);
-    ROMDST->add(KCL_Q.in(nodes, indices(phases,T)) == 0);
+    ODO->add(KCL_P.in(nodes, indices(phases,T)) == 0);
+    ODO->add(KCL_Q.in(nodes, indices(phases,T)) == 0);
     
     /**  THERMAL LIMITS **/
     
@@ -3214,39 +3214,39 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
     Constraint Thermal_Limit_from("Thermal_Limit_from");
     Thermal_Limit_from += power(Pij, 2) + power(Qij, 2);
     Thermal_Limit_from -= power(S_max, 2);
-    ROMDST->add(Thermal_Limit_from.in(Et_ph) <= 0);
+    ODO->add(Thermal_Limit_from.in(Et_ph) <= 0);
 
     Constraint Thermal_Limit_to("Thermal_Limit_to");
     Thermal_Limit_to += power(Pji, 2) + power(Qji, 2);
     Thermal_Limit_to -= power(S_max, 2);
-//    ROMDST->add(Thermal_Limit_to.in(exist_Et) <= 0);
+//    ODO->add(Thermal_Limit_to.in(exist_Et) <= 0);
 
     
     /*  Thermal Limit Constraints for expansion edges */
     Constraint Thermal_Limit_from_exp("Thermal_Limit_From_Exp");
     Thermal_Limit_from_exp += power(Pij, 2) + power(Qij, 2);
     Thermal_Limit_from_exp -= power(w_e,2)*power(S_max, 2);
-//    ROMDST->add(Thermal_Limit_from_exp.in(pot_Et) <= 0);
-//        ROMDST->get_constraint("Thermal_Limit_From_Exp")->print_expanded();
+//    ODO->add(Thermal_Limit_from_exp.in(pot_Et) <= 0);
+//        ODO->get_constraint("Thermal_Limit_From_Exp")->print_expanded();
     
     /**  GENERATOR INVESTMENT **/
     
     /*  On/Off status */
     Constraint OnOff_maxP("OnOff_maxP");
     OnOff_maxP += Pg_ - pg_max*w_g;
-    ROMDST->add(OnOff_maxP.in(pot_Gt) <= 0);
+    ODO->add(OnOff_maxP.in(pot_Gt) <= 0);
     
     Constraint Perspective_OnOff("Perspective_OnOff");
     Perspective_OnOff += power(Pg_,2) - Pg2*w_g;
-    ROMDST->add(Perspective_OnOff.in(pot_Gt) <= 0);
+    ODO->add(Perspective_OnOff.in(pot_Gt) <= 0);
     
     Constraint OnOff_maxQ("OnOff_maxQ");
     OnOff_maxQ += Qg - qg_max*w_g;
-    ROMDST->add(OnOff_maxQ.in(pot_Gt) <= 0);
+    ODO->add(OnOff_maxQ.in(pot_Gt) <= 0);
     
     Constraint OnOff_maxQ_N("OnOff_maxQ_N");
     OnOff_maxQ_N += Qg + qg_max*w_g;
-    ROMDST->add(OnOff_maxQ_N.in(pot_Gt) >= 0);
+    ODO->add(OnOff_maxQ_N.in(pot_Gt) >= 0);
     
     /**  POWER FLOW **/
     
@@ -3260,12 +3260,12 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
                     auto ph_t = ph+","+t;
                     //Constraint Flow_P_From("Flow_P_From_"+ph_t);
                    // Flow_P_From = v(a->_src->_name+",ph"+to_string(i)+","+t) - 2*(r(ph)*Pij(ph_t) + x(ph)*Qij(ph_t)) - v(a->_dest->_name+",ph"+to_string(i)+","+t);
-                    //ROMDST->add(Flow_P_From==0);
+                    //ODO->add(Flow_P_From==0);
                     auto src = a->_src->_name+",ph"+to_string(i);
                     auto dest = a->_dest->_name+",ph"+to_string(i);
                     Constraint Flow_P_From("Flow_P_From_"+ph_t);
                     Flow_P_From = g_fr(v(a->_src->_name+",ph"+to_string(i)+","+t) - 2*(r(ph)*Pij(ph_t) + x(ph)*Qij(ph_t)) - v(a->_dest->_name+",ph"+to_string(i)+","+t);
-                    ROMDST->add(Flow_P_From==0);
+                    ODO->add(Flow_P_From==0);
                 }
             }
         }
@@ -3278,18 +3278,18 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
      */
 //    Constraint Flow_P_From("Flow_P_From");
 //    Flow_P_From = v.from() - 2*(r*Pij + x*Qij) - v.to();
-//    ROMDST->add(Flow_P_From.in(_exist_arcs, indices(phases,T))==0);
+//    ODO->add(Flow_P_From.in(_exist_arcs, indices(phases,T))==0);
 //    Constraint Flow_P_to("Flow_P_Fto");
 //    Flow_P_to = v.to() - 2*(r*Pji + x*Qji) - v.from();
-//    ROMDST->add(Flow_P_to.in(_exist_arcs, indices(phases,T))==0);
+//    ODO->add(Flow_P_to.in(_exist_arcs, indices(phases,T))==0);
 //
 //    Constraint Flow_P_Expansion_L("Flow_P_Expansion_L");
 //    Flow_P_Expansion_L = v.from() - 2*(r*Pij + x*Qij) - v.to() - (1-w_e)*(v_diff_max);
-//    ROMDST->add(Flow_P_Expansion_L.in(_potential_expansion, T)<=0);
+//    ODO->add(Flow_P_Expansion_L.in(_potential_expansion, T)<=0);
 //
 //    Constraint Flow_P_Expansion_U("Flow_P_Expansion_U");
 //    Flow_P_Expansion_U = v.from() - 2*(r*Pij + x*Qij) - v.to() + (1-w_e)*(v_diff_max);
-//    ROMDST->add(Flow_P_Expansion_U.in(_potential_expansion, T)>=0);
+//    ODO->add(Flow_P_Expansion_U.in(_potential_expansion, T)>=0);
     
     
     /**  PV **/
@@ -3297,20 +3297,20 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
     /*  On/Off on Potential PV */
     Constraint OnOffPV("OnOffPV");
     OnOffPV += Pv_cap - w_pv*pv_max;
-    ROMDST->add(OnOffPV.in(indices(_potential_PV_gens)) <= 0);
-//        ROMDST->get_constraint("OnOffPV")->print_expanded();
+    ODO->add(OnOffPV.in(indices(_potential_PV_gens)) <= 0);
+//        ODO->get_constraint("OnOffPV")->print_expanded();
     
     /*  Max Cap on Potential PV */
     Constraint MaxCapPV("MaxCapPV");
     MaxCapPV += Pv - Pv_cap*pv_out;
-    ROMDST->add(MaxCapPV.in(PV_pot_t) <= 0);
-//        ROMDST->get_constraint("MaxCapPV")->print_expanded();
+    ODO->add(MaxCapPV.in(PV_pot_t) <= 0);
+//        ODO->get_constraint("MaxCapPV")->print_expanded();
     
     /*  Existing PV */
     Constraint existPV("existPV");
     existPV += Pv - pv_max*pv_out;
-    ROMDST->add(existPV.in(indices(_existing_PV_gens, T)) <= 0);
-//        ROMDST->get_constraint("existPV")->print_expanded();
+    ODO->add(existPV.in(indices(_existing_PV_gens, T)) <= 0);
+//        ODO->get_constraint("existPV")->print_expanded();
     
     
     /**  BATTERIES **/
@@ -3319,41 +3319,41 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
     Constraint Apparent_Limit_Batt_Pot("Apparent_Limit_Batt_Potential");
     Apparent_Limit_Batt_Pot += power(Pb, 2) + power(Qb, 2);
     Apparent_Limit_Batt_Pot -= power(w_b,2)*power(pb_max, 2);
-    ROMDST->add(Apparent_Limit_Batt_Pot.in(pot_Bt) <= 0);
+    ODO->add(Apparent_Limit_Batt_Pot.in(pot_Bt) <= 0);
     
     /*  Apparent Power Limit on Existing Batteries */
     Constraint Apparent_Limit_Batt("Apparent_Limit_Batt_Existing");
     Apparent_Limit_Batt += power(Pb, 2) + power(Qb, 2);
     Apparent_Limit_Batt -= power(pb_max, 2);
-    ROMDST->add(Apparent_Limit_Batt.in(exist_Bt) <= 0);
+    ODO->add(Apparent_Limit_Batt.in(exist_Bt) <= 0);
     
     
     /*  State Of Charge */
     Constraint State_Of_Charge("State_Of_Charge");
     State_Of_Charge = Sc - Sc.prev() + Pb_;
-    ROMDST->add(State_Of_Charge.in(Bt1) == 0);
+    ODO->add(State_Of_Charge.in(Bt1) == 0);
     
     /*  State Of Charge 0 */
     auto Bat0 = indices(_battery_inverters,phases,T.start());
     Constraint State_Of_Charge0("State_Of_Charge0");
     State_Of_Charge0 = Sc;
-    ROMDST->add(State_Of_Charge0.in(Bat0) == 0);
+    ODO->add(State_Of_Charge0.in(Bat0) == 0);
     Constraint Pb0("Pb0");
     Pb0 = Pb_;
-    ROMDST->add(Pb0.in(Bat0) == 0);
+    ODO->add(Pb0.in(Bat0) == 0);
     
     /*  EFFICIENCIES */
     Constraint DieselEff("DieselEff");
     DieselEff += Pg - gen_eff*Pg_;
-//    ROMDST->add(DieselEff.in(Gt) == 0);
+//    ODO->add(DieselEff.in(Gt) == 0);
     
     Constraint EfficiencyExist("BatteryEfficiencyExisting");
     EfficiencyExist += Pb  - eff_a*Pb_ - eff_b;//TODO without time extending eff_a and eff_b
-    ROMDST->add(EfficiencyExist.in(indices(_eff_pieces,exist_Bt)) <= 0);
+    ODO->add(EfficiencyExist.in(indices(_eff_pieces,exist_Bt)) <= 0);
     
     Constraint EfficiencyPot("BatteryEfficiencyPotential");
     EfficiencyPot += Pb  - eff_a*Pb_ - eff_b*w_b;
-    ROMDST->add(EfficiencyPot.in(indices(_eff_pieces,pot_Bt)) <= 0);
+    ODO->add(EfficiencyPot.in(indices(_eff_pieces,pot_Bt)) <= 0);
     
     
     for (auto n:nodes) {
@@ -3364,13 +3364,13 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
             if(min_diesel_invest.eval(gen->_name)==max_diesel_invest.eval(gen->_name)){
                 Constraint FixedDieselInvest("FixedDieselInvest"+gen->_name);
                 FixedDieselInvest += w_g(gen->_name);
-                ROMDST->add(FixedDieselInvest == 1);
+                ODO->add(FixedDieselInvest == 1);
                 for (auto j = i+1; j < b->_pot_gen.size(); j++) {
                     auto gen2 = b->_pot_gen[j];
                     if (gen2->_gen_type==gen->_gen_type) {
                         Constraint FixedDieselInvest("FixedDieselInvest"+gen2->_name);
                         FixedDieselInvest += w_g(gen2->_name);
-                        ROMDST->add(FixedDieselInvest == 1);
+                        ODO->add(FixedDieselInvest == 1);
                     }
                 }
             }
@@ -3385,7 +3385,7 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
                 }
                 auto rhs = min_diesel_invest.eval(gen->_name);
                 if (rhs>0) {
-                    ROMDST->add(MinDieselInvest >= rhs);
+                    ODO->add(MinDieselInvest >= rhs);
                 }
             }
         }
@@ -3394,13 +3394,13 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
             if(min_batt_invest.eval(bat->_name)==max_batt_invest.eval(bat->_name)){
                 Constraint FixedBattInvest("FixedBattInvest"+bat->_name);
                 FixedBattInvest += w_b(bat->_name);
-                ROMDST->add(FixedBattInvest == 1);
+                ODO->add(FixedBattInvest == 1);
                 for (auto j = i+1; j < b->_pot_bat.size(); j++) {
                     auto bat2 = b->_pot_bat[j];
                     if (bat2->_bat_type==bat->_bat_type) {
                         Constraint FixedBattInvest("FixedBattInvest"+bat2->_name);
                         FixedBattInvest += w_b(bat2->_name);
-                        ROMDST->add(FixedBattInvest == 1);
+                        ODO->add(FixedBattInvest == 1);
                     }
                 }
             }
@@ -3415,13 +3415,13 @@ unique_ptr<Model> PowerNet::build_ROMDST_3phase(PowerModelType pmt, int output, 
                 }
                 auto rhs = min_batt_invest.eval(bat->_name);
                 if (rhs>0) {
-                    ROMDST->add(MinBattInvest >= rhs);
+                    ODO->add(MinBattInvest >= rhs);
                 }
             }
         }
     }
-//        ROMDST->print_expanded();
-    return ROMDST;
+//        ODO->print_expanded();
+    return ODO;
 }
 
 unique_ptr<Model> PowerNet::build_ROMDST(PowerModelType pmt, int output, double tol, int max_nb_hours){

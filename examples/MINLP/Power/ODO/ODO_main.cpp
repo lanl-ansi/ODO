@@ -168,7 +168,7 @@ int main (int argc, char * argv[])
     DebugOn("nb installed lines = " << Nline << endl);
     DebugOn("number of buses = " << Nbus << endl);
 
-    auto ROMDST = grid.build_ROMDST_3phase(pmt,output,tol,max_nb_hours);
+    auto ROMDST = grid.build_ODO_model(pmt,output,tol,max_nb_hours);
 //    return 0;
     
     
