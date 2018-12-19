@@ -176,7 +176,7 @@ If you're using a Linux virtual machine, enter the following command before runn
 * `cp ../ext_lib/Ipopt/lib/* /usr/local/lib`
 
 
-The **ODO** executable will can be found under `ODO/bin`.
+The **ODO** executable can be found under `ODO/bin`.
 
 For running the tool, enter:
 
