@@ -15,7 +15,7 @@
 <p align="center">www.allinsights.io/gravity</p>
 
 *****************************
-See [INSTALL.md](INSTALL.md) for instructions on compiling ODO
+See [INSTALL.md](INSTALL.md) for instructions on running/compiling ODO
 
 After running make, the ODO executable can be found under ODO/bin/
 *****************************
