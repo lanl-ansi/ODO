@@ -7,7 +7,7 @@
 <p align="center"> Operations & Design Optimization for Networked Microgrids </p>
 <p align="center">Funded by the U.S. Department Of Energy (Program of Dan Ton)</p>
 
-<p align="center">ODO was built using Gravity</p>
+<p align="center">**ODO** was built using **Gravity**</p>
 
 <p align="center">
 <img src="https://static.wixstatic.com/media/c6cff5_dd7659693c6247dc8eb8605d3dca95e8~mv2_d_3300_2550_s_4_2.png/v1/crop/x_1058,y_575,w_1183,h_1225/fill/w_288,h_298,al_c,usm_0.66_1.00_0.01/c6cff5_dd7659693c6247dc8eb8605d3dca95e8~mv2_d_3300_2550_s_4_2.png" width="150">
@@ -15,14 +15,14 @@
 <p align="center">www.allinsights.io/gravity</p>
 
 *****************************
-See [INSTALL.md](INSTALL.md) for instructions on running/compiling ODO
+See [INSTALL.md](INSTALL.md) for instructions on running/compiling **ODO**
 
-After running make, the ODO executable can be found under ODO/bin/
+The **ODO** executable can be found under ODO/bin/
 *****************************
 
 # Input
 
-ODO takes two different files as input: [NET.json](data_sets/Power/IEEE13.json) and [ODO_INPUT.xlsx](data_sets/Power/ODO_INPUT.xlsx), these can be found under [data_sets/Power](data_sets/Power).
+**ODO** takes two different files as input: [NET.json](data_sets/Power/IEEE13.json) and [ODO_INPUT.xlsx](data_sets/Power/ODO_INPUT.xlsx), these can be found under [data_sets/Power](data_sets/Power).
 
 The first file contains all the network properties including branch resistance/reactance, bus shunts, operating limits, and others.
 
