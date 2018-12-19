@@ -1,3 +1,33 @@
+# RUN IN DOCKER
+
+**ODO** is deployed on [Docker](www.docker.com) to support multiplatforms.
+
+To get the tool running, you just need to install Docker:
+
+For Windows users follow this [link](https://hub.docker.com/editions/community/docker-ce-desktop-windows)
+
+For Mac users follow this [link](https://hub.docker.com/editions/community/docker-ce-desktop-mac)
+
+For Linux users follow the instructions [here](https://docs.docker.com/install/linux/docker-ce/ubuntu/#install-docker-ce)
+
+Once docker is installed and running, open a terminal (in Windows use PowerShell or Commad Prompt) and enter the following:
+
+`docker pull hhijazi01/odo`
+
+`docker run -it hhijazi01/odo`
+
+This will take you to the Docker container that contains the ODO tool.
+
+Now you can run the tool by entering:
+
+`ODO/bin/odo`
+
+That's it!
+
+Everytime there's an update to the tool, it will be pushed to the Docker container so make sure to follow the steps above including the pull command.
+
+# COMPILE FROM SOURCE CODE
+
 DEPENDENCIES
 -------
 cmake: http://www.cmake.org (Version 3.2 or better)
@@ -34,7 +64,7 @@ First, make sure cmake, gfortran, gcc-6 or clang and ipopt are installed.
 
 ### Windows Users
 
-We are working on adding binaries for Windows users, check back soon!
+We are working on adding instructions for Windows users, check back soon!
 
 ### Mac Users
 
