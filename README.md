@@ -4,7 +4,7 @@
 <p align="center">
 <img src="media/LOGO.jpg">
 </p>
-<p align="center"> Operations & Design Optimization for Networked Microgrids </p>
+<H1 align="center"> Operations & Design Optimization for Networked Microgrids </H1>
 <p align="center">Funded by the U.S. Department Of Energy (Program of Dan Ton)</p>
 
 <p align="center">ODO was built using Gravity</p>
