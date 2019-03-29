@@ -1,9 +1,9 @@
 //
 //  Node.cpp
 //  Cycle_Basis_PF
-//  adapt from power tools 
-//  Created by Sumiran on 17/06/2014.
-//  Copyright (c) 2014 NICTA. All rights reserved.
+//  adapt from power tools
+//  Created by Hassan on 17/06/2014.
+
 //
 
 #include <gravity/Node.h>
@@ -43,7 +43,7 @@ void Node::addArc(Arc* a){
 int Node::removeArc(Arc* a){
     vector<Arc*>::iterator it = branches.begin();
     while (it != branches.end()) {
-        if((*it) == a){            
+        if((*it) == a){
             it = branches.erase(it);
             return 0;
         }

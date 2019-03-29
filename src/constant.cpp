@@ -2,66 +2,47 @@
 // Created by Hassan on 19/11/2015.
 //
 
-#include <math.h>
 #include <gravity/constant.h>
-//#include <Gravity/func.h>
-#include <sstream>
+#include <gravity/func.h>
 
-namespace gravity {
-    template<> string constant<float>::to_str() const{
-        char buffer [50];
-        sprintf (buffer, "%g", _val);
-        return string(buffer);
-    }
+using namespace std;
+using namespace gravity;
 
 
-    template<> string constant<double>::to_str() const{
-        char buffer [50];
-        sprintf (buffer, "%g", _val);
-        return string(buffer);
-    }
-
-    template<> string constant<long double>::to_str() const{
-        char buffer [50];
-        sprintf (buffer, "%Lg", _val);
-        return string(buffer);
-    }
-
-    template<> string constant<int>::to_str() const{
-        char buffer [50];
-        sprintf (buffer, "%d", _val);
-        return string(buffer);
-    }
-
-    template<> string constant<short>::to_str() const{
-        char buffer [50];
-        sprintf (buffer, "%d", _val);
-        return string(buffer);
-    }
-
-    template<> string constant<bool>::to_str() const{
-        char buffer [5];
-        sprintf (buffer, "%d", _val);
-        return string(buffer);
-    }
+/**
+ Transform a complex number to a string with user-specified precision.
+ @param[in] a_value complex number to be transformed.
+ @param[in] n number of decimals in transformation.
+ @return a string with the specified precision.
+ */
+string gravity::to_string_with_precision(const Cpx& a_value, const int n){
+    std::ostringstream out;
+    out << std::setprecision(n) << a_value;
+    return out.str();
 }
 
 
+constant<Cpx> gravity::conj(const constant<Cpx>& cst){
+    constant<Cpx> newc(cst);
+    newc.set_val(conj(newc.eval()));
+    return newc;
+}
 
+constant<double> gravity::real(const constant<Cpx>& cst){
+    return real(cst.eval());
+}
 
+constant<double> gravity::sqrmag(const constant<Cpx>& cst){
+    return std::pow(abs(cst.eval()),2);
+}
 
+constant<double> gravity::angle(const constant<Cpx>& cst){
+    return arg(cst.eval());
+}
 
-//string gravity::constant<float>::to_str() const{
-//    char buffer [50];
-//    if(typeid(type)==typeid(float) || typeid(type)==typeid(double) || typeid(type)==typeid(long double)){
-//        sprintf (buffer, "%g", _val);
-//    }
-//    else {
-//        sprintf (buffer, "%d", _val);
-//    }
-//    //        cout << string(buffer) << endl;
-//    return string(buffer);
-//    //            return std::to_string(_val);
-//}
+constant<double> gravity::imag(const constant<Cpx>& cst){
+    return imag(cst.eval());
+}
+
 
 

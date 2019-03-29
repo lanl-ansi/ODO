@@ -2,8 +2,8 @@
 //  Arc.h
 //  Cycle_Basis_PF
 //
-//  Created by Sumiran on 18/06/2014.
-//  Copyright (c) 2014 NICTA. All rights reserved.
+//  Created by Hassan on 18/06/2014.
+
 //
 
 #ifndef Cycle_Basis_PF_Arc_h
@@ -32,7 +32,7 @@ public:
     bool _imaginary = false;
     int _free = false;
     std::vector<Node*> _intersection; // intersection of node _src and node _dest
-    std::vector<gravity::index_pair*> _intersection_clique; // useful for clique tree 
+    std::vector<gravity::index_pair*> _intersection_clique; // useful for clique tree
 
     /* @brief Returns the neighbour of n if n is a node of the arc, null otherwise */
     Node* neighbour(Node* n);
@@ -50,6 +50,35 @@ public:
     Arc(Node* s, Node* d);
     Arc(Node* s, Node* d, double weight);
     Arc* clone();
+    
+    bool has_phase(const string& ph) const{
+        for(auto ph_i: _phases){
+            if("ph"+to_string(ph_i)==ph){
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    void set_phases(string phases){
+        if(phases.empty())
+            return;
+        auto pos = phases.find_first_of(",");
+        auto ph = phases.substr(0,pos);
+        _phases.insert(stoi(ph));
+        phases = phases.substr(pos+1);
+        if(phases.empty())
+            return;
+        pos = phases.find_first_of(",");
+        ph = phases.substr(0,pos);
+        _phases.insert(stoi(ph));
+        phases = phases.substr(pos+1);
+        if(phases.empty())
+            return;
+        pos = phases.find_first_of(",");
+        ph = phases.substr(0,pos);
+        _phases.insert(stoi(ph));
+    }
     
     /* Connects the current arc to its source and destination, adding itself to the list of branches in these nodes */
     void connect();

@@ -435,6 +435,12 @@ public:
     /** @brief Returns the upper bound on the voltage magnitude at this bus */
     double vmax(void);
 
+    
+    /** @brief has phase i */
+    bool has_phase(int i){
+        return _phases.count(i)!=0;
+    };
+    
     /** @brief Connect a generator to the current bus */
     void connect_gen(Gen* g);
     

@@ -10,7 +10,7 @@ execute_process(
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/ext_lib
   )
 find_package(ARMADILLO)
-include_directories(${ARMADILLO_ROOT_DIR})
+include_directories(${ARMADILLO_ROOT_DIR}/include)
 set(LIBS ${LIBS} armadillo)
 add_subdirectory(${ARMADILLO_ROOT_DIR})
 

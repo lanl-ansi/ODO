@@ -25,66 +25,91 @@
 #define BOLDMAGENTA "\033[1m\033[35m"      /* Bold Magenta */
 #define BOLDCYAN    "\033[1m\033[36m"      /* Bold Cyan */
 #define BOLDWHITE   "\033[1m\033[37m"      /* Bold White */
-
+#include <optionParser.hpp>
 #include <vector>
 #include <gravity/types.h>
 #include <gravity/GravityConfig.h>
-#include <iostream>
 double get_wall_time();
 double get_cpu_time();
 
-using namespace std;
 
-/** FOR RapidJSON */
-struct MyHandler {
-    bool Null() { cout << "Null()" << endl; return true; }
-    bool Bool(bool b) { cout << "Bool(" << boolalpha << b << ")" << endl; return true; }
-    bool Int(int i) { cout << "Int(" << i << ")" << endl; return true; }
-    bool Uint(unsigned u) { cout << "Uint(" << u << ")" << endl; return true; }
-    bool Int64(int64_t i) { cout << "Int64(" << i << ")" << endl; return true; }
-    bool Uint64(uint64_t u) { cout << "Uint64(" << u << ")" << endl; return true; }
-    bool Double(double d) { cout << "Double(" << d << ")" << endl; return true; }
-    bool RawNumber(const char* str, unsigned length, bool copy) {
-        cout << "Number(" << str << ", " << length << ", " << boolalpha << copy << ")" << endl;
-        return true;
-    }
-    bool String(const char* str, unsigned length, bool copy) {
-        cout << "String(" << str << ", " << length << ", " << boolalpha << copy << ")" << endl;
-        return true;
-    }
-    bool StartObject() { cout << "StartObject()" << endl; return true; }
-    bool Key(const char* str, unsigned length, bool copy) {
-        cout << "Key(" << str << ", " << length << ", " << boolalpha << copy << ")" << endl;
-        return true;
-    }
-    bool EndObject(unsigned memberCount) { cout << "EndObject(" << memberCount << ")" << endl; return true; }
-    bool StartArray() { cout << "StartArray()" << endl; return true; }
-    bool EndArray(unsigned elementCount) { cout << "EndArray(" << elementCount << ")" << endl; return true; }
-};
+int nthOccurrence(const std::string& str, const std::string& findMe, int nth);
+
+
+op::OptionParser readOptions(int argc, char * argv[]);
+
 
 
 //Split "mem" into "parts", e.g. if mem = 10 and parts = 4 you will have: 0,2,4,6,10
 //if possible the function will split mem into equal chuncks, if not
 //the last chunck will be slightly larger
-std::vector<int> bounds(int parts, int mem);
+std::vector<size_t> bounds(unsigned parts, size_t mem);
 
-//template<typename Tobj>
-//std::vector<Tobj*> get_ptr_vec(const std::vector<Tobj>& vec){
-//    auto new_vec = std::vector<Tobj*>();
-//    auto n = vec.size();
-//    new_vec.resize(n);
-//    for(unsigned i = 0; i<n; i++ ){
-//        new_vec[i] = (Tobj*)&vec[i];
-//    }
-//    return new_vec;
-//}
+
+gravity::Sign reverse(gravity::Sign s);
+
+gravity::Sign sign_add(gravity::Sign s1, gravity::Sign s2);
+
+gravity::Sign sign_product(gravity::Sign s1, gravity::Sign s2);
 
 gravity::indices time(unsigned p1 ,unsigned p2);
 
 template<typename... Args>
 gravity::indices time(std::string idx1, Args&&... args) {
-    gravity::indices res(idx1,(args)...);
+    gravity::indices res("time");
+    res.init(idx1,args...);
     res._time_extended = true;
     return res;
 }
+
+
+bool operator <(const Cpx& lhs, const Cpx& rhs);
+
+bool operator >(const Cpx& lhs, const Cpx& rhs);
+
+bool operator <=(const Cpx& lhs, const Cpx& rhs);
+
+bool operator >=(const Cpx& lhs, const Cpx& rhs);
+
+namespace gravity{
+    
+//    Cpx min (const Cpx& a, const Cpx& b);
+//    Cpx max (const Cpx& a, const Cpx& b);
+    
+    template<class T, typename enable_if<is_same<T,Cpx>::value>::type* = nullptr>
+    T min (const T& a, const T& b){
+        Cpx res(a);
+        if (res.real()>b.real()) {
+            res.real(b.real());
+        }
+        if (res.imag()>b.imag()) {
+            res.imag(b.imag());
+        }
+        return res;
+    }
+    
+    template<class T, typename enable_if<is_same<T,Cpx>::value>::type* = nullptr>
+    T max(const T& a, const T& b){
+        Cpx res(a);
+        if (res.real()<b.real()) {
+            res.real(b.real());
+        }
+        if (res.imag()<b.imag()) {
+            res.imag(b.imag());
+        }
+        return res;
+    }
+    
+    template<class T, typename enable_if<is_arithmetic<T>::value>::type* = nullptr>
+    T min (const T& a, const T& b){
+        return std::min(a,b);
+    }
+    
+    
+    template<class T, typename enable_if<is_arithmetic<T>::value>::type* = nullptr>
+    T max(const T& a, const T& b){
+        return std::max(a,b);
+    }
+}
+
 #endif

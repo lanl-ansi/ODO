@@ -3,8 +3,8 @@
 //
 //
 //  Created by Hassan on 13/05/2016.
-//
-//
+
+
 
 #ifndef ____param__
 #define ____param__
@@ -22,412 +22,665 @@
 #include <gravity/Node.h>
 #include <limits>
 #include <math.h>
+#include <random>
+#ifdef USE_QPP
+    #include "qpp.h"
+#endif
 
 using namespace std;
 
 
-template <typename T>
-std::string to_string_with_precision(const T a_value, const int n = 6)
-{
-    std::ostringstream out;
-    out << std::setprecision(n) << a_value;
-    return out.str();
-}
 
 
-namespace gravity {
+
+namespace gravity {    
+    
     /** Backbone class for parameter */
     class param_: public constant_ {
-        
+
     protected:
-        
-        NType                                  _intype;
-        shared_ptr<map<string,unsigned>>       _indices = nullptr; /*<< A map storing all the indices this parameter has, the key is represented by a string, while the entry indicates the right position in the values and bounds vectors */
-        shared_ptr<vector<string>>              _rev_indices = nullptr; /*<< A vector storing all the indices this parameter has */
-        
-        
-        
-        /* (Guanglei) added this part to record the indices of sdp variables. SDP should be indexed by a pair of integers. This is true for all SDP solvers. */
-        shared_ptr<map<string,pair<unsigned, unsigned>>> _sdpindices;
-        
+
+        NType                                          _intype; /**< internal storage type **/
+
+        void set_intype(NType type) {
+            _intype = type;
+        }
+
     public:
+
+        string                                         _name = "noname";
+        shared_ptr<size_t>                             _id = make_shared<size_t>(0); /**< index of current param/var */
+        shared_ptr<size_t>                             _vec_id = make_shared<size_t>(0);; /**< index of the corresponding vector (for Cplex). **/
+        shared_ptr<indices>                            _indices = nullptr; /*< If indexed, point to the indexing set */
+        bool                                           _is_relaxed = false; /*< Is this an integer parameter/variable that has been relaxed? */
+        bool                                           _new = true; /**< Will become false once this parameter/variable is added to a program. Useful for iterative model solving. */
+
+        bool                                           _is_conjugate = false; /**< True if the parameter/variable is a complex number and is conjugated */
+        bool                                           _is_sqrmag = false; /**< True if the parameter/variable is the magnitude squared of a complex number */
+        bool                                           _is_angle = false; /**< True if the parameter/variable is the angle of a complex number */
+        bool                                           _is_real = false; /**< True if the parameter/variable is the real part of a complex number */
+        bool                                           _is_imag = false; /**< True if the parameter/variable is the imaginary part of a complex number */
         
-        shared_ptr<int>                                _id = make_shared<int>(-1);
-        shared_ptr<int>                                _vec_id; /**< index in the vector array (useful for Cplex). **/
+        shared_ptr<param_>                                        _real = nullptr; /**< Pointer to the real variable in case this is a complex var */
+        shared_ptr<param_>                                        _imag = nullptr; /**< Pointer to the imaginary variable in case this is a complex var */
+
+        /* For Ipopt Use */
+        vector<double>                                 _l_dual; /*<<Dual values for lower bounds */
+        vector<double>                                 _u_dual; /*<<Dual values for upper bounds */
         
-        string                                         _name;
-        shared_ptr<vector<vector<unsigned>>>           _ids = nullptr; /*<<A vector storing all the indices this parameter has in the order they were created */
-        unique_id                              _unique_id = make_tuple<>(_id,unindexed_,0,0,0); /* */
+        /**
+         A shallow copy of p (ignoring _val and _range)
+         @param[in] p param_ to copy from.
+         */
+        void shallow_copy(const param_& p) {
+            _id = p._id;
+            _vec_id = p._vec_id;
+            _name = p._name;
+            _is_transposed = p._is_transposed;
+            _is_vector = p._is_vector;
+            _is_angle = p._is_angle;
+            _is_sqrmag = p._is_sqrmag;
+            _is_conjugate = p._is_conjugate;
+            _is_real = p._is_real;
+            _is_imag = p._is_imag;
+            _real = p._real;
+            _imag = p._imag;
+            _indices = p._indices;
+            _dim[0] = p._dim[0];
+            _dim[1] = p._dim[1];
+        }
+
         
-        bool                                   _is_indexed = false;
-        bool                                   _is_relaxed = false;
-        bool                                   _time_extended = false;
-        bool                                   _new = true; /**< Will become false once this param is added to a program. Can be useful for iterative model solving. */
-        vector<double>                         _l_dual; /*<<Dual values for lower bounds */
-        vector<double>                         _u_dual; /*<<Dual values for upper bounds */
         
+        virtual void initialize_uniform(){};
+        virtual shared_ptr<param_> pcopy() const{return nullptr;};
         
-        virtual ~param_() {};
+        virtual void print(){};
         
+        virtual void print_vals(int prec){};
+        
+        virtual void print_symbolic() const{};
+        
+        virtual void print(int prec){};                
+
         void set_id(size_t idx) {
             *_id = idx;
-            get<0>(_unique_id) = _id;
         };
-        
+
         void set_vec_id(size_t idx) {
             *_vec_id = idx;
         };
-        
-        int get_id() const {
+
+        size_t get_id() const {
             return *_id;
         };
-        
+
         size_t get_vec_id() const {
             return *_vec_id;
         };
+
+        indices get_indices() const{return *_indices;};
         
-        size_t get_id_inst(unsigned inst = 0) const {
-            if (_is_indexed) {
-                if(_ids->at(0).size() <= inst){
-                    throw invalid_argument("get_id_inst out of range");
-                }
-                return _ids->at(0).at(inst);
+        inline size_t get_id_inst(size_t inst = 0) const {
+            if (is_indexed()) {
+//                if(_indices->_ids->at(0).size() <= inst){
+//                    throw invalid_argument("param::get_id_inst(size_t inst) inst is out of range");
+//                }
+                return _indices->_ids->at(0).at(inst);
+            }
+//            auto dim = get_dim();
+//            if(inst > dim-1){
+//                throw invalid_argument("param::get_id_inst(size_t inst) inst is out of range");
+//            }
+            if(_dim[0]==1 && _dim[1]==1){/* unidimensional param */
+                return 0;
             }
             return inst;
         };
-        
-        size_t get_id_inst(unsigned inst1, unsigned inst2) const {
-            if (_is_indexed) {
-                if (_ids->size()==1) {
-                    return _ids->at(0).at(inst2);
-                }
-                return _ids->at(inst1).at(inst2);
-            }
-            return inst2;
-            //        throw invalid_argument("Calling get_id_inst on a non indexed parpam\n");
-        };
-        
-        void copy(const param_& p) {
-            _id = p._id;
-            _unique_id = p._unique_id;
-            _vec_id = p._vec_id;
-            _name = p._name;
-            _indices = p.get_indices();
-            _rev_indices = p.get_rev_indices();
-            _ids =p._ids;
-            _is_transposed = p._is_transposed;
-            _is_vector = p._is_vector;
-            _is_matrix = p._is_matrix;
-            _is_indexed = p._is_indexed;
-            _dim = p._dim;
-            _time_extended = p._time_extended;
-        }
 
-        pair<size_t,size_t> get_sdp_inst(unsigned inst = 0) const {
-            int idx = _ids->at(0).at(inst);
-            auto it = _indices->begin();
-            for(it =_indices->begin(); it != _indices->end(); ++it) {
-                if(it->second==idx) break;
+        size_t get_id_inst(size_t inst1, size_t inst2) const {
+            if (is_indexed()) {
+                if (_indices->_ids->size()==1) {
+                    return _indices->_ids->at(0).at(inst2);
+                }
+                return _indices->_ids->at(inst1).at(inst2);
             }
-            string key = it->first;
-            DebugOff("\nkey found: " << it->first.at(0) << "," << it->first.at(2));
-            pair<size_t,size_t> res;
-            res = make_pair(std::stoi(it->first.substr(0,1)),std::stoi(it->first.substr(2,1)));
-            return res;
+            return get_id_inst(inst2);
+//            throw invalid_argument("Calling get_id_inst(size_t inst1, size_t inst2) on a non-indexed param\n");
         };
-        
-        // newly added part by guanglei
-        pair<size_t,size_t> get_sdpid() const {
-            if (_is_indexed) {
-                return _sdpindices->begin()->second;
+
+
+        string get_name(bool in_func, bool exclude_indexing) const{
+            string name = _name;
+            if(_indices && exclude_indexing){
+                name = name.substr(0, name.find_last_of("."));
             }
-            return make_pair(0, 0);
+            if (!in_func && _is_transposed) {
+                name += "\u1D40";
+            }
+            return name;
         };
-        
-        string get_name(bool indices=false) const;
+
         void set_name(const string s) {
             _name = s;
         };
-        
-        string get_name(size_t inst) const {
+
+        string get_name(size_t inst) const {/*< Get the name of the indexed version of this variable */
             string name = _name;
-            name = name.substr(0, name.find(".", 0));
-            if (_is_indexed && name.find("[")!=std::string::npos) {// Name has index already
+            name = name.substr(0, name.find_first_of("."));
+            if(_is_imag || _is_real || _is_angle || _is_conjugate){
+                if (name.find(")")==std::string::npos) {
+                    name += ")";
+                }
+            }
+            else if(_is_sqrmag){
+                if (name.find("|²")==std::string::npos) {
+                    name += "|²";
+                }
+            }
+            if (_is_vector) {//Remove brackets
+                if(name.back()==']'){
+                    name = name.substr(1, name.size()-2);
+                }
+                else {
+                    name = name.substr(1, name.size()-1);
+                }
+            }
+            if (is_indexed() && name.find("[")!=std::string::npos) {// Name  already has index
                 return name;
             }
-            if (_is_indexed) {
-                int rev_idx = _ids->at(0).at(inst);
-                name += "["+_rev_indices->at(rev_idx)+"]";
+            if (is_indexed()) {
+                size_t rev_idx = _indices->_ids->at(0).at(inst);
+                name += "["+_indices->_keys->at(rev_idx)+"]";
+            }
+            else if(_indices){
+                name += "["+_indices->_keys->at(get_id_inst(inst))+"]";
             }
             else {
-                name += "["+_rev_indices->at(inst)+"]";
+                name += "["+to_string(inst)+"]";
             }
             return name;
         };
-        
+
         string get_name(size_t inst1, size_t inst2) const {
             string name = _name;
-            name = name.substr(0, name.find(".", 0));
-            if (_is_indexed && name.find("[")!=std::string::npos) {// Name has index already
+            name = name.substr(0, name.find_first_of("."));
+            if(_is_imag || _is_real || _is_angle || _is_conjugate){
+                if (name.find(")")==std::string::npos) {
+                    name += ")";
+                }
+            }
+            else if(_is_sqrmag){
+                if (name.find("|²")==std::string::npos) {
+                    name += "|²";
+                }
+            }
+            if (_is_vector) {//Remove brackets
+                if(name.back()==']'){
+                    name = name.substr(1, name.size()-2);
+                }
+                else if(name.front()=='['){
+                    name = name.substr(1, name.size()-1);
+                }
+            }
+            if (is_indexed() && name.find("[")!=std::string::npos) {// Name has index already
                 return name;
             }
-            if (_is_indexed) {
-                //                if (<#condition#>) {
-                //                    <#statements#>
-                //                }
-                name += "["+_rev_indices->at(_ids->at(inst1).at(inst2))+"]";
+            if (is_indexed()) {
+                name += "["+_indices->_keys->at(_indices->_ids->at(inst1).at(inst2))+"]";
             }
-            else {
-                name += "["+_rev_indices->at(inst2)+"]";
+            else if(_indices){
+                name += "["+_indices->_keys->at(inst1)+","+_indices->_keys->at(inst2)+"]";
+            }
+            else{
+                name += "["+to_string(inst1)+","+to_string(inst2)+"]";
             }
             return name;
         };
-        
+
         NType get_intype() const {
             return _intype;
         }
-        
-        
-        
-        
-        
-        shared_ptr<map<string,unsigned>> get_indices() const {
-            return _indices;
+
+        shared_ptr<map<string,size_t>> get_keys_map() const {
+            if(_indices){
+                return _indices->_keys_map;
+            }
+            throw invalid_argument("Calling get_keys_map() on a non-indexed param/var.");
+        }
+
+        shared_ptr<vector<string>> get_keys() const {
+            if(_indices){
+                return _indices->_keys;
+            }
+            throw invalid_argument("Calling get_keys() on a non-indexed param/var.");
+        }
+
+
+        shared_ptr<vector<vector<size_t>>> get_ids() const {
+            if(_indices){
+                return _indices->_ids;
+            }
+            throw invalid_argument("Calling get_ids() on a non-indexed param/var.");
+        }
+
+
+        /* Querries */
+
+        inline bool is_indexed() const{
+            return (_indices && _indices->_ids);
         }
         
-        shared_ptr<vector<string>> get_rev_indices() const {
-            return _rev_indices;
+        bool is_double_indexed() const{
+            return (_indices && _indices->_ids && _indices->_ids->size()>1);
         }
-        
-        
-        /**  (guanglei) added sdpvar */
-        shared_ptr<map<string, pair<unsigned, unsigned>>> get_sdpindices() const {
-            return _sdpindices;
-        }
-        
-        shared_ptr<vector<vector<unsigned>>> get_ids() const {
-            return _ids;
-        }
-        
-        
-        void set_type(NType type) {
-            _intype = type;
-        }
-        
-        /** Querries */
-        
-        
+
         bool is_binary() const {
             return (_intype==binary_);
         };
-        
+
         bool is_integer() const {
-            return (_intype==integer_);
+            return (_intype==integer_ || _intype==short_);
         };
-        
+
         bool is_float() const {
             return (_intype==float_);
         };
-        
+
         bool is_double() const {
             return (_intype==double_);
         };
-        
+
         bool is_long() const {
             return (_intype==long_);
         };
+
+        bool is_complex() const {
+            return (_intype==complex_);
+        };
+
+//        Sign get_all_sign() const{return unknown_;}; /**< If all instances of the current parameter/variable have the same sign, it returns it, otherwise, it returns unknown. **/
+//        virtual Sign get_sign(size_t idx = 0) const; /**< returns the sign of one instance of the current parameter/variable. **/
         
-        Sign get_all_sign() const; /**< If all instances of the current parameter/variable have the same sign, it returns it, otherwise, it returns unknown. **/
-        Sign get_sign(int idx = 0) const; /**< returns the sign of one instance of the current parameter/variable. **/
-        pair<Real,Real>* get_range() const;
-        
+
         /** Operators */
-        bool operator==(const param_& p) const {
-            return (_unique_id == p._unique_id);
-            //        return (_id==p._id && _type==p._type && _intype==p._intype && get_name()==p.get_name());
-        }
-        size_t get_nb_instances() const {
-            if (_is_indexed) {
-                if (_ids->size()>1) {
-                    throw invalid_argument("get_nb_instances should be called with index here\n");
+        
+        template<typename... Args>
+        void index_in(const indices& ids1, Args&&... args) {
+            auto ids = indices(ids1,args...);
+            if(!_indices || _indices->empty()){/**< No need to add each key individually */
+                if(!ids._excluded_keys.empty()){
+                    ids.remove_excluded();
                 }
-                return _ids->at(0).size();
+                _indices = make_shared<indices>(ids);
+                auto dim = _indices->size();
+                if(ids._type==matrix_){
+                    if(_is_transposed){
+                        _dim[0] = ids._dim->at(1);
+                        _dim[1] = ids._dim->at(0);
+                    }
+                    else {
+                        _dim[1] = ids._dim->at(0);
+                        _dim[0] = ids._dim->at(1);
+                    }
+                }
+                else {
+                    if(_is_transposed){
+                        _dim[1] = dim;
+                    }
+                    else {
+                        _dim[0] = dim;
+                    }
+                }
+                _name += ".in("+ids._name+")";
             }
-            return get_dim();
+            else { /**< Add each key in ids individually */
+                _indices->_ids = make_shared<vector<vector<size_t>>>();
+                _indices->_ids->resize(1);
+                if(ids.empty()){
+                    DebugOn("In function param.in(const indices& index_set1, Args&&... args), all index sets are empty!\n. Creating and empty variable! Check your sum/product operators.\n");
+                    _name += "_EMPTY";
+                    return;
+                }
+                string excluded;
+                size_t idx = 0;
+                /* Used for truncating extra indices */
+//                auto nb_sep1 = _indices->_dim->size();
+//                auto nb_sep1 = ids._dim->size();
+//                auto nb_sep2 = ids._dim->size();
+                
+                for(auto key: *ids._keys){
+                    if(ids._excluded_keys.count(idx++)!=0){
+                        excluded += key + ",";
+                        continue;
+                    }
+                    if(_indices->_type==to_){
+                        key = key.substr(key.find_last_of(",")+1,key.size());
+                    }
+                    else if(_indices->_type==from_){
+                        key = key.substr(0, key.find_last_of(","));
+                        key = key.substr(key.find_last_of(",")+1,key.size());
+                    }
+                    auto nb_sep1 = count(_indices->_keys->front().begin(), _indices->_keys->front().end(), ',');
+                    auto nb_sep2 = count(key.begin(), key.end(), ',');
+                    if(nb_sep2>nb_sep1){
+                        auto pos = nthOccurrence(key, ",", nb_sep1+1);
+                        key = key.substr(0,pos);
+                    }
+                    auto it1 = _indices->_keys_map->find(key);
+                    if (it1 == _indices->_keys_map->end()){
+                        throw invalid_argument("In function param.in(const vector<Tobj>& vec), vec has unknown key");
+                    }
+                    _indices->_ids->at(0).push_back(it1->second);
+                }
+                if(_is_transposed){
+                    _dim[1]=_indices->_ids->at(0).size();
+                }
+                else {
+                    _dim[0]=_indices->_ids->size();
+                }
+                _name += ".in("+ids._name+")";
+                if(!excluded.empty()){
+                    excluded = excluded.substr(0,excluded.size()-1); /* remove last comma */
+                    _name += "\{" + excluded + "}";
+                }
+            }
         }
         
-        size_t get_nb_instances(unsigned inst) const {
-            if (_is_indexed) {
-                return _ids->at(inst).size();
+        /**
+         Index the current object using incoming edges for nodes stored in vec. This is a double indexing where each row corresponds to a node, and columns correspond to the edge ids.
+         @param[in] vec vector of nodes
+         */
+        void index_in_arcs(const vector<Node*>& vec) {
+            _indices->_ids = make_shared<vector<vector<size_t>>>();
+            if(vec.empty()){
+                DebugOn("In function param.in_arcs(const vector<Node*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
+                _name += "_EMPTY";
+                return;
             }
-            return get_dim();
+            string key;
+            size_t inst = 0;
+            for(auto it = vec.begin(); it!= vec.end(); it++) {
+                if(!(*it)->_active) {
+                    continue;
+                }
+                _indices->_ids->push_back(vector<size_t>());
+                for (auto &a:(*it)->get_in()) {
+                    if (!a->_active) {
+                        continue;
+                    }
+                    key = a->_name;
+                    auto it1 = _indices->_keys_map->find(key);
+                    if (it1 == _indices->_keys_map->end()){
+                        throw invalid_argument("In function param.index_in_arcs(const vector<Node*>& vec), unknown arc key.");
+                    }
+                    _indices->_ids->at(inst).push_back(it1->second);
+                }
+                ++inst;
+            }
         }
+        
+        /**
+         Index the current object using outgoing edges for nodes stored in vec. This is a double indexing where each row corresponds to a node, and columns correspond to the edge ids.
+         @param[in] vec vector of nodes
+         */
+        void index_out_arcs(const vector<Node*>& vec) {
+            _indices->_ids = make_shared<vector<vector<size_t>>>();
+            if(vec.empty()){
+                DebugOn("In function param.index_out_arcs(const vector<Node*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
+                _name += "_EMPTY";
+                return;
+            }
+            string key;
+            size_t inst = 0;
+            for(auto it = vec.begin(); it!= vec.end(); it++) {
+                if(!(*it)->_active) {
+                    continue;
+                }
+                _indices->_ids->push_back(vector<size_t>());
+                for (auto &a:(*it)->get_out()) {
+                    if (!a->_active) {
+                        continue;
+                    }
+                    key = a->_name;
+                    auto it1 = _indices->_keys_map->find(key);
+                    if (it1 == _indices->_keys_map->end()){
+                        throw invalid_argument("In function param.in_arcs(const vector<Node*>& vec), unknown arc key.");
+                    }
+                    _indices->_ids->at(inst).push_back(it1->second);
+                }
+                ++inst;
+            }
+        }
+        
+        /** Index param/var based on auxiliary objects attached to nodes in vec
+         @param[in] vec vector of nodes
+         */
+        void index_in_aux(const vector<Node*>& vec, const string& aux_type) {
+            _indices->_ids = make_shared<vector<vector<size_t>>>();
+            if(vec.empty()){
+                DebugOn("In function param.index_in_aux(const vector<Node*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
+                _name += "_EMPTY";
+                return;
+            }
+            string key;
+            size_t inst = 0;
+            for(auto it = vec.begin(); it!= vec.end(); it++) {
+                if(!(*it)->_active) {
+                    continue;
+                }
+                _indices->_ids->push_back(vector<size_t>());
+                for (auto &a:(*it)->get_aux(aux_type)) {
+                    if (!a->_active) {
+                        continue;
+                    }
+                    key = a->_name;
+                    auto it1 = _indices->_keys_map->find(key);
+                    if (it1 == _indices->_keys_map->end()){
+                        throw invalid_argument("In function param.in_aux(const vector<Node*>& vec), unknown arc key.");
+                    }
+                    _indices->_ids->at(inst).push_back(it1->second);
+                }
+                ++inst;
+            }
+        }
+        
+        bool operator==(const param_& p) const {
+            return (_id==p._id && _type==p._type && _intype==p._intype && get_name(false,false)==p.get_name(false,false));
+        }
+
+        size_t get_dim() const{
+            return constant_::get_dim();
+        }
+
+        size_t get_dim(size_t i) const{
+            if(is_double_indexed())
+                return _indices->_ids->at(i).size();
+            return this->_dim[0];
+        }
+        
+        /** Fill x with the variable's values */
+        virtual void set_double_val(double* x){};
+        /** Fill the variable's values from x */
+        virtual void get_double_val(const double* x){};
+        
+        /** Fill the variable's value at pos to x */
+        virtual void get_double_val(size_t pos, double x){};
+        
+        /** Fill x from the variable's value at pos */
+        virtual void set_double_val(size_t pos, double& x){};
+        
+        /** round the value stored at position i to the nearest integer */
+        virtual void round_vals(){};
+
+        /** Fill x with the variable's lower bound values */
+        virtual void set_double_lb(double* x){};
+        /** Fill x with the variable's upper bound values */
+        virtual void set_double_ub(double* x){};
+        
+        /** Return lower bound violation */
+        virtual double get_lb_violation(size_t i){return 0;};
+        /** Return upper bound violation */
+        virtual double get_ub_violation(size_t i){return 0;};
+        
+        virtual void copy_vals(const shared_ptr<param_>& p){};
+        virtual void copy_bounds(const shared_ptr<param_>& p){};
+        virtual double get_double_lb(size_t i) const{return 0;};
+        virtual double get_double_ub(size_t i) const{return 0;};
+
     };
-    
-    
-    /** A parameter can be a bool, a short, an int, a float or a double*/
+
+
+    /** A parameter can be a bool, a short, an int, a float, a double, a long double or a complex<double>. */
     template<typename type = double>
     class param: public param_ {
-    protected:
-        
-        
+
     public:
-        shared_ptr<vector<type>>                _val;
-        shared_ptr<pair<type,type>>             _range; /**< (Min,Max) values in vals **/
-        
+
+        shared_ptr<vector<type>>                _val = nullptr; /**< vector of values **/
+        shared_ptr<pair<type,type>>             _range = nullptr; /**< (Min,Max) values in vals **/
+
+        template<typename T=type,
+        typename std::enable_if<is_arithmetic<T>::value>::type* = nullptr>
         param() {
-            _type = par_c;
-            _name = "noname";
-            _vec_id = make_shared<int>(-1);
-            //    throw invalid_argument("Please enter a name in the parameter constructor");
             update_type();
+            init_range();
             _val = make_shared<vector<type>>();
-            _dim.resize(1,0);
-            _indices = make_shared<map<string,unsigned>>();
-            _rev_indices = make_shared<vector<string>>();
-            _ids = make_shared<vector<vector<unsigned>>>();
-            _ids->resize(1);
-            _sdpindices = make_shared<map<string,pair<unsigned, unsigned>>>();
-            _range = make_shared<pair<type,type>>(make_pair<>(numeric_limits<type>::max(), numeric_limits<type>::lowest()));
-        }
-        
-        ~param() {
         }
         
         
+
+        template<class T=type, class = typename enable_if<is_same<T, Cpx>::value>::type>
+        param(){
+            update_type();
+            init_range();
+            _val = make_shared<vector<type>>();
+        }
+        
+        shared_ptr<param_> pcopy() const{return make_shared<param>(*this);};
+
+        shared_ptr<constant_> copy()const{return make_shared<param>(*this);};
+        
+        ~param(){};
+        template<class T2, typename std::enable_if<is_convertible<T2, type>::value && sizeof(T2) < sizeof(type)>::type* = nullptr>
+        param (const param<T2>& p) {
+            *this = p;            
+        }
+
         param (const param& p) {
-            _type = par_c;
-            _intype = p._intype;
-            _id = p._id;
-            _unique_id = p._unique_id;
-            _vec_id = p._vec_id;
-            _val = p._val;
-            _name = p._name;
-            _indices = p._indices;
-            _rev_indices = p._rev_indices;
-            _ids = make_shared<vector<vector<unsigned>>>(*p._ids);
-            _sdpindices = p._sdpindices;
-            _range = p._range;
-            _is_transposed = p._is_transposed;
-            _is_vector = p._is_vector;
-            _is_matrix = p._is_matrix;
-            _is_indexed = p._is_indexed;
-            _dim = p._dim;
-            _time_extended = p._time_extended;
+            *this = p;
         }
         
         param (param&& p) {
-            _type = par_c;
-            _intype = p._intype;
-            _id = p._id;
-            _unique_id = p._unique_id;
-            _vec_id = p._vec_id;
-            _val = move(p._val);
-            _name = p._name;
-            _indices = move(p._indices);
-            _rev_indices = move(p._rev_indices);
-            _ids = move(p._ids);
-            _sdpindices = p._sdpindices;
-            _range = p._range;
-            _is_transposed = p._is_transposed;
-            _is_vector = p._is_vector;
-            _is_matrix = p._is_matrix;
-            _is_indexed = p._is_indexed;
-            _dim = p._dim;
-            _time_extended = p._time_extended;
+            *this = move(p);
         }
-                
+
         param& operator=(const param& p) {
-            _type = par_c;
+            _type = p._type;
             _intype = p._intype;
             _id = p._id;
-            _unique_id = p._unique_id;
             _vec_id = p._vec_id;
             _val = p._val;
-            _name = p._name;
-            _indices = p._indices;
-            _rev_indices = p._rev_indices;
-            _ids = make_shared<vector<vector<unsigned>>>(*p._ids);
-            _sdpindices = p._sdpindices;
             _range = p._range;
+            _name = p._name;
             _is_transposed = p._is_transposed;
             _is_vector = p._is_vector;
-            _is_matrix = p._is_matrix;
-            _is_indexed = p._is_indexed;
-            _dim = p._dim;
-            _time_extended = p._time_extended;
+            _new = p._new;
+            _is_relaxed = p._is_relaxed;
+            _is_angle = p._is_angle;
+            _is_sqrmag = p._is_sqrmag;
+            _is_conjugate = p._is_conjugate;
+            _is_real = p._is_real;
+            _is_imag = p._is_imag;
+            _real = p._real;
+            _imag = p._imag;
+            if(p._indices){
+                _indices = make_shared<indices>();
+                _indices->shallow_copy(p._indices);
+            }
+            _dim[0] = p._dim[0];
+            _dim[1] = p._dim[1];
             return *this;
         }
         
+        template<class T2, typename std::enable_if<is_convertible<T2, type>::value && sizeof(T2) < sizeof(type)>::type* = nullptr>
+        param& operator=(const param<T2>& p) {
+            update_type();
+            _id = p._id;
+            _vec_id = p._vec_id;
+            _val = make_shared<vector<type>>();
+            _val->resize(p._val->size());
+            for(auto i = 0; i<p._val->size();i++){
+                _val->at(i) = p._val->at(i);
+            }
+            _range = make_shared<pair<type,type>>();
+            _range->first = p._range->first;
+            _range->second = p._range->second;
+            _name = p._name;
+            _is_transposed = p._is_transposed;
+            _is_vector = p._is_vector;
+            _new = p._new;
+            _is_relaxed = p._is_relaxed;
+            _is_angle = p._is_angle;
+            _is_sqrmag = p._is_sqrmag;
+            _is_conjugate = p._is_conjugate;
+            _is_real = p._is_real;
+            _is_imag = p._is_imag;
+            _real = p._real;
+            _imag = p._imag;
+            if(p._indices){
+                _indices = make_shared<indices>(*p._indices);
+            }
+            _dim[0] = p._dim[0];
+            _dim[1] = p._dim[1];
+            return *this;
+        }
+
         param& operator=(param&& p) {
-            _type = par_c;
+            _type = p._type;
             _intype = p._intype;
             _id = p._id;
-            _unique_id = p._unique_id;
             _vec_id = p._vec_id;
             _val = move(p._val);
+            _range = move(p._range);
             _name = p._name;
-            _indices = move(p._indices);
-            _rev_indices = move(p._rev_indices);
-            _ids = move(p._ids);
-            _sdpindices = p._sdpindices;
-            _range = p._range;
             _is_transposed = p._is_transposed;
             _is_vector = p._is_vector;
-            _is_matrix = p._is_matrix;
-            _is_indexed = p._is_indexed;
-            _dim = p._dim;
-            _time_extended = p._time_extended;
+            _new = p._new;
+            _is_relaxed = p._is_relaxed;
+            _is_angle = p._is_angle;
+            _is_sqrmag = p._is_sqrmag;
+            _is_conjugate = p._is_conjugate;
+            _is_real = p._is_real;
+            _is_imag = p._is_imag;
+            _real = p._real;
+            _imag = p._imag;
+            _indices = move(p._indices);
+            _dim[0] = p._dim[0];
+            _dim[1] = p._dim[1];
             return *this;
         }
-        
-        void transpose(){
-            _is_transposed = !_is_transposed;
-            if (!_is_vector) {
-                _is_vector = true;
-            }
-            if (_is_matrix) {
-                //            auto new_val = make_shared<vector<type>>();
-                //            new_val->resize(get_dim());
-                //            for (int i = 0; i<_dim[1]; i++) {
-                //                for (int j = 0; j<_dim[0]; j++) {
-                //                    new_val->at(i*_dim[0]+j) = eval(j, i);
-                //                }
-                //            }
-                auto temp = _dim[0];
-                _dim[0] = _dim[1];
-                _dim[1] = temp;
-                
-                //            _val = new_val;
-            }
-        }
-        
+
         param tr() const {
             auto p = param(*this);
-            p.transpose();
-            //        p._is_transposed = true;
-            //        p._is_vector = true;
+            p.constant_::transpose();
+            p._name = "["+p._name+"]";
             return p;
         }
-        
+
         param vec() const {
             auto p = param(*this);
             p._is_vector = true;
+            p._name = "["+p._name+"]";
             return p;
         }
-        
+
+
         shared_ptr<vector<type>> get_vals() const {
             return _val;
         }
-        
-        void set_type(CType t) {
-            _type = t;
-        }
-        
-        void set_intype(NType t) {
-            _intype = t;
-        }
-        
+
+
         void update_type() {
             _type = par_c;
             if(typeid(type)==typeid(bool)) {
@@ -454,93 +707,105 @@ namespace gravity {
                 _intype = long_;
                 return;
             }
-            throw bad_alloc();
+            if(typeid(type)==typeid(Cpx)) {
+                _intype = complex_;
+                return;
+            }
+            throw invalid_argument("Unsupported numerical parameter type");
         }
-        
-        
-        param(const string& s) {
+
+
+        param(const string& s): param(){
             _name = s;
-            
-            _vec_id = make_shared<int>(-1);
-            update_type();
-            _val = make_shared<vector<type>>();
-            _dim.resize(1,0);
-            _indices = make_shared<map<string,unsigned>>();
-            _rev_indices = make_shared<vector<string>>();
-            _ids = make_shared<vector<vector<unsigned>>>();
-            _ids->resize(1);
-            _sdpindices = make_shared<map<string,pair<unsigned, unsigned>>>();
-            _range = make_shared<pair<type,type>>(make_pair<>(numeric_limits<type>::max(), numeric_limits<type>::lowest()));
         }
-        
+
         NType get_intype() const {
             return _intype;
         }
-        
-        type eval() const {
-            if (_is_indexed) {
-                return _val->at(_ids->at(0).back());
+
+        inline type eval() const {
+            if (is_indexed()) {
+                return _val->at(_indices->_ids->at(0).back());
             }
             return _val->back();
         }
-        
-        type eval(unsigned i) const {
-            if (_is_indexed) {
-//                if (_ids->size()>1) {
+
+        inline type eval(size_t i) const {
+//            if(is_matrix()){
+//                throw invalid_argument("eval() should be called with double index here\n");
+//            }
+            auto idx = get_id_inst(i);
+//            if (is_indexed()) {
+//                if (_indices->_ids->size()>1) {
 //                    throw invalid_argument("eval() should be called with double index here\n");
 //                }
-                if (_val->size()<=_ids->at(0).at(i)){
-                    throw invalid_argument("Param eval out of range");
-                }
-                return _val->at(_ids->at(0).at(i));
-            }
-            if (_val->size()<=i){
-                throw invalid_argument("Param eval out of range");
-            }
-            return _val->at(i);
+//                if (_val->size()<=idx){
+//                    throw invalid_argument("Param eval out of range");
+//                }
+//                return _val->at(idx);
+//            }
+//            if (_val->size()<=idx){
+//                throw invalid_argument("Param eval out of range");
+//            }
+            return _val->at(idx);
         }
-        
-        
+
+
         type eval(const string& key) const{
-            return _val->at(param_::_indices->at(key));
+            return _val->at(param_::_indices->_keys_map->at(key));
         }
-        
-        type eval(unsigned i, unsigned j) const {
-            
-            if (_is_indexed && _ids->size()>1) {
-//                if (_ids->at(i).at(j) >= _val->size()) {
+
+        inline type eval(size_t i, size_t j) const {
+
+            if (is_indexed() && _indices->_ids->size()>1) {
+//                if (_indices->_ids->at(i).at(j) >= _val->size()) {
 //                    throw invalid_argument("eval(i,j): out of range");
 //                }
-                return _val->at(_ids->at(i).at(j));
+                return _val->at(_indices->_ids->at(i).at(j));
             }
-//
-//            
-            if (!_is_matrix) {
+
+            if (!is_matrix()) {
                 return eval(j);
             }
-            //        if (_is_indexed) {
-            //            if (i >= _ids->size()) {
-            ////                if (i>=_val->size()) {
-            //                    throw invalid_argument("error");
-            ////                }
-            //                return _val->at(_ids->at(0));
-            //            }
-            //            if (_ids->at(i)>=_val->size()) {
-            //                throw invalid_argument("error");
-            //            }
             if (_is_transposed) {
-                return _val->at(j*_dim[0]+i);//TODO same for vars
+                return _val->at(j*_dim[0]+i);
             }
             return _val->at(i*_dim[1]+j);
-            //        }
-            //        if (i>=_val->size()) {
-            //            throw invalid_argument("error");
-            //        }
-            //        throw invalid_argument("cannot ")
+        }
+
+
+        /* Modifiers */
+        
+        
+        void real_imag(const param<>& pr, const param<>& pi){
+            this->_real = make_shared<param<>>(pr);
+            this->_imag = make_shared<param<>>(pi);
+        }
+        
+        void set_real(const param<>& p){
+            _real = make_shared<param<>>(p);
+        }
+        
+        void set_imag(const param<>& p){
+            _imag = make_shared<param<>>(p);
+        }
+        
+
+        
+        
+        template<typename T=type,
+        typename std::enable_if<is_arithmetic<T>::value>::type* = nullptr>
+        void init_range() {
+            _range = make_shared<pair<type,type>>(make_pair<>(numeric_limits<type>::max(), numeric_limits<type>::lowest()));
         }
         
         
-        /* Modifiers */
+        template<class T=type, class = typename enable_if<is_same<T, Cpx>::value>::type>
+        void init_range() {
+            _range = make_shared<pair<type,type>>(make_pair<>(Cpx(numeric_limits<double>::max(), numeric_limits<double>::max()), Cpx(numeric_limits<double>::lowest(), numeric_limits<double>::lowest())));
+        }
+
+        
         void    set_size(vector<size_t> dims){
             if (dims.size()==1) {
                 set_size(dims[0]);
@@ -549,34 +814,37 @@ namespace gravity {
                 set_size(dims[0],dims[1]);
             }
             else {
-                _dim = dims;
-                //TODO allocate val
+                throw invalid_argument("In Function set_size(vector<size_t> dims), dims.size() should be less or equal 2. \n");
             }
         }
-        
-        void   set_size(size_t s1, size_t s2, type val = 0) {
-            _is_matrix = true;
-            _dim.resize(2);
+
+        void   set_size(size_t s1, size_t s2) {
             _dim[0] = s1;
             _dim[1] = s2;
-            auto index = _dim[1]*s1-1+s2-1;
-            _val->resize(index+1);
-            _val->at(index) = val;
+            auto dim = _dim[0]*_dim[1];
+            _val->resize(dim);
+            if (is_matrix()) {
+                _is_vector = true;
+            }
         };
-        
-        void   set_size(size_t s, type val = 0) {
-            _val->resize(s, val);
+
+        void   set_size(size_t s) {
+            _val->resize(s);
             _dim[0] = s;
         };
-        
-        
+
+
         void add_val(type val) {
+            if(is_matrix()){
+                throw invalid_argument("Cannot call param::add_val(type val) on matrix");
+            }
             _val->push_back(val);
             update_range(val);
-            _dim[0]++;
+            _dim[0] = _val->size();
         }
-        
-        void update_range(type val) {
+
+
+        template<class T=type, class = typename enable_if<is_arithmetic<T>::value>::type> void update_range(T val) {
             if (val < _range->first) {
                 _range->first = val;
             }
@@ -584,10 +852,89 @@ namespace gravity {
                 _range->second = val;
             }
         }
-        
+
+        void add_val(size_t i, type val) {
+            if(is_matrix()){
+                throw invalid_argument("Cannot call param::add_val(type val) on matrix");
+            }
+            _dim[0] = max(_dim[0],i+1);
+            _val->resize(max(_val->size(),i+1));
+            _val->at(i) = val;
+            update_range(val);
+        }
+
         void set_val(size_t i, size_t j, type val) {
-            _is_matrix = true;
-            _dim.resize(2);
+//            if(!is_matrix()){
+//                throw invalid_argument("Function set_val(size_t i, size_t j, type val) should be called on a matrix");
+//            }
+//            if(_dim[0] <= i || _dim[1] <= j){
+//                throw invalid_argument("In Function set_val(size_t i, size_t j, type val), i or j are out of bounds");
+//            }
+            update_range(val);
+            if (_is_transposed) {
+//                if(_val->at(_dim[0]*j+i)==_range->first ||  _val->at(_dim[0]*j+i)==_range->second || val<_range->first || val>_range->second){
+                    _val->at(_dim[0]*j+i) = val;
+//                    reset_range();
+//                }
+//                else {
+//                    _val->at(_dim[0]*j+i) = val;
+//                }
+            }
+           else {
+//                if(_val->at(_dim[1]*i+j)==_range->first ||  _val->at(_dim[1]*i+j)==_range->second || val<_range->first || val>_range->second){
+//                    _val->at(_dim[1]*i+j) = val;
+//                    reset_range();
+//                }
+//                else {
+                    _val->at(_dim[1]*i+j) = val;
+//                }
+           }
+        }
+
+
+
+        size_t set_val(const string& key, type val) {
+            auto it = _indices->_keys_map->find(key);
+            if (it == _indices->_keys_map->end()){
+                throw invalid_argument("in Function size_t set_val(const string& key, type val), unknown key");
+            }
+            if(_val->at(it->second)==_range->first ||  _val->at(it->second)==_range->second || val<_range->first || val>_range->second){
+                _val->at(it->second) = val;
+                reset_range();
+            }
+            else {
+                _val->at(it->second) = val;
+            }
+            return it->second;
+        }
+
+        size_t add_val(const string& key, type val) {
+            if(!_indices){
+                _indices = make_shared<indices>();
+            }
+            auto index = param_::_indices->size();
+            auto pp = param_::_indices->_keys_map->insert(make_pair<>(key,index));
+            if (pp.second) {//new index inserted
+                _val->resize(max(_val->size(),index+1));
+                _dim[0] = max(_dim[0],_val->size());
+                _indices->_keys->resize(_val->size());
+                _indices->_keys->at(index) = key;
+                _val->at(index) = val;
+                update_range(val);
+                return index;
+            }
+            else {
+                Warning("WARNING: calling add_val(const string& key, T val) with an existing key, overriding existing value" << endl);
+                _val->at(pp.first->second) = val;
+                if(val==_range->first || val==_range->second){
+                    reset_range();
+                }
+                return pp.first->second;
+            }
+        }
+
+        void add_val(size_t i, size_t j, type val) {
+            _is_vector = true;
             _dim[0] = max(_dim[0],i+1);
             _dim[1] = max(_dim[1],j+1);
             auto index = _dim[1]*i+j;
@@ -595,43 +942,60 @@ namespace gravity {
             _val->at(index) = val;
             update_range(val);
         }
-        
-        size_t set_val(const string& key, type val) {
-            auto index = param_::_indices->size();
-            auto pp = param_::_indices->insert(make_pair<>(key,index));
-            if (pp.second) {//new index inserted
-                _val->resize(max(_val->size(),index+1));
-                _dim[0] = max(_dim[0],_val->size());
-                _rev_indices->resize(_val->size());
-                _rev_indices->at(index) = key;
-                _val->at(index) = val;
+
+        void set_val(size_t i, type val) {
+            if(is_matrix()){
+                throw invalid_argument("set_val(size_t i, type val) should be called with double index here\n");
+            }
+            if (is_indexed()) {
+                if (_indices->_ids->size()>1) {
+                    throw invalid_argument("set_val(size_t i, type val) should be called with double index here\n");
+                }
+                if (_val->size()<=_indices->_ids->at(0).at(i)){
+                    throw invalid_argument("Param set_val(size_t i, type val) out of range");
+                }
+                if(_val->at(_indices->_ids->at(0).at(i))==_range->first ||  _val->at(_indices->_ids->at(0).at(i))==_range->second || val<_range->first || val>_range->second){
+                    reset_range();
+                }
+                _val->at(_indices->_ids->at(0).at(i)) = val;
+            }
+            if (_val->size()<=i){
+                throw invalid_argument("Param set_val(size_t i, type val) out of range");
+            }
+            if(_val->at(i)==_range->first ||  _val->at(i)==_range->second || val<_range->first || val>_range->second){
+                _val->at(i) = val;
+                reset_range();
+            }
+            else{
+                _val->at(i) = val;
+            }
+        }
+
+        void set_val(type val) {
+            if(is_indexed()){
                 update_range(val);
-                return index;
+                bool reset = false;
+                for(auto &idx: _indices->_ids->at(0)){
+                    if(_val->at(idx)==_range->first ||  _val->at(idx)==_range->second){
+                        reset = true;
+                    }
+                    _val->at(idx) = val;
+                }
+                if(reset){
+                    reset_range();
+                }
             }
             else {
-                _val->at(pp.first->second) = val;
-                update_range(val);
-                return pp.first->second;
+                for (auto i = 0; i<_val->size() ;i++) {
+                    _val->at(i) = val;
+                }
+                _range->first = val;
+                _range->second = val;
             }
         }
-        
-        void set_val(size_t i, type val) {
-            _dim[0] = max(_dim[0],i+1);
-            _val->resize(max(_val->size(),i+1));
-            _val->at(i) = val;
-            update_range(val);
-        }
-        
-        void set_val(type val) {
-            for (auto &v: _val) {
-                v = val;
-            }
-            _range->first = val;
-            _range->second = val;
-        }
-        
-        Sign get_sign(int idx = 0) const {
-            assert(idx < _val->size());
+
+        template<typename T=type,
+        typename std::enable_if<is_arithmetic<T>::value>::type* = nullptr> Sign get_sign(size_t idx) const{
             if (_val->at(idx)==0) {
                 return zero_;
             }
@@ -644,9 +1008,55 @@ namespace gravity {
             return unknown_;
         }
         
+        template<class T=type, class = typename enable_if<is_same<T, Cpx>::value>::type> Sign get_sign(size_t idx) const{
+            if (_val->at(idx) == Cpx(0,0)) {
+                return zero_;
+            }
+            if ((_val->at(idx).real() < 0 && _val->at(idx).imag() < 0)) {
+                return neg_;
+            }
+            if ((_val->at(idx).real() > 0 && _val->at(idx).imag() > 0)) {
+                return pos_;
+            }
+            if ((_val->at(idx).real() <= 0 && _val->at(idx).imag() <= 0)) {
+                return non_pos_;
+            }
+            if ((_val->at(idx).real() >= 0 && _val->at(idx).imag() >= 0)) {
+                return non_neg_;
+            }
+            return unknown_;
+        }
+
+
+//        template<class T2, typename std::enable_if<is_convertible<T2, type>::value && sizeof(T2) <= sizeof(type)>::type* = nullptr>
+//        shared_ptr<constant_> add(shared_ptr<param<T2>> c1){
+//            
+//        }
+        Sign get_all_sign() const{
+            return get_all_sign_();
+        }
         
-        
-        Sign get_all_sign() const {
+        template<class T=type, class = typename enable_if<is_same<T, Cpx>::value>::type> Sign get_all_sign_() const{
+            if (_range->first == Cpx(0,0) && _range->second == Cpx(0,0)) {
+                return zero_;
+            }
+            if ((_range->second.real() < 0 && _range->second.imag() < 0)) {
+                return neg_;
+            }
+            if ((_range->second.real() > 0 && _range->second.imag() > 0)) {
+                return pos_;
+            }
+            if (_range->second <= Cpx(0,0)) {
+                return non_pos_;
+            }
+            if (_range->first >= Cpx(0,0)) {
+                return non_neg_;
+            }
+            return unknown_;
+        }
+
+        template<typename T=type,
+        typename std::enable_if<is_arithmetic<T>::value>::type* = nullptr> Sign get_all_sign_() const {
             if (_range->first == 0 && _range->second == 0) {
                 return zero_;
             }
@@ -664,2214 +1074,918 @@ namespace gravity {
             }
             return unknown_;
         }
+
+
+        bool is_unit() const{
+            return is_unit_();
+        }
         
-        
-        
-        bool is_unit() const { /**< Returns true if all values of this paramter are 1 **/
+        template<class T=type, typename enable_if<is_arithmetic<T>::value>::type* = nullptr> bool is_unit_() const { /**< Returns true if all values of this paramter are 1 **/
             return (_range->first == 1 && _range->second == 1);
         }
         
-        bool is_zero() const { /**< Returns true if all values of this paramter are 0 **/
-            return (_range->first == 0 && _range->second == 0);
+        template<class T=type, class = typename enable_if<is_same<T, Cpx>::value>::type> bool is_unit_() const{
+            return (_range->first == Cpx(1,0) && _range->second == Cpx(1,0));
+        }
+
+
+        bool is_zero() const{
+            return is_zero_();
+        }
+        
+        template<class T=type, typename enable_if<is_arithmetic<T>::value>::type* = nullptr> bool is_zero_() const { /**< Returns true if all values of this paramter are 0 **/
+            return (get_dim()==0 || (_range->first == 0 && _range->second == 0));
+        }
+
+        template<class T=type, class = typename enable_if<is_same<T, Cpx>::value>::type> bool is_zero_() const{
+            return (get_dim()==0 || (_range->first == Cpx(0,0) && _range->second == Cpx(0,0)));
         }
         
         bool is_non_positive() const { /**< Returns true if all values of this paramter are <= 0 **/
-            return (_range->second <= 0   && _range->first <= 0);
+            auto sgn = get_all_sign();
+            return (sgn==non_pos_ || sgn==zero_ || sgn==neg_);
         }
-        
+
         bool is_positive() const { /**< Returns true if all values of this paramter are positive **/
-            return (_range->first > 0 && _range->second > 0);
+            return (get_all_sign()==pos_);
         }
-        
+
         bool is_non_negative() const { /**< Returns true if all values of this paramter are >= 0 **/
-            return (_range->first >= 0  && _range->second >= 0);
+            auto sgn = get_all_sign();
+            return (sgn==non_neg_ || sgn==zero_ || sgn==pos_);
         }
-        
+
         bool is_negative() const { /**< Returns true if all values of this paramter are positive **/
-            return (_range->second < 0  && _range->first < 0);
+            return (get_all_sign()==neg_);
         }
-        
+
         /** Operators */
         bool operator==(const param& p) const {
-            return (get_name()==p.get_name() && _type==p._type && _intype==p._intype && _dim==p._dim && _indices==p._indices && _sdpindices==p._sdpindices && _val==p._val);
-            //return (get_name()==p.get_name() && _type==p._type && _intype==p._intype && _dim==p._dim && _indices==p._indices && _val==p._val);
+            if (get_name(false,false)!=p.get_name(false,false) || _type!=p._type || _intype!=p._intype || _dim[0]!=p._dim[0] || _dim[1]!=p._dim[1]) return false;
+            if(_indices==p._indices) return true; /* accounts for both being nullptr */
+            if((_indices && !p._indices) || (p._indices && !_indices) || (*_indices != *p._indices)) return false;
+            return true;
         }
         
-//        param& operator^(size_t d) {
-//            set_size(d);
-//            return *this;
-//        }
-        
-        void initialize_all(type v) {
-            for (int i = 0; i<_val->size(); i++) {
-                _val->at(i) = v;
+        bool operator!=(const param& p) const {
+            return !(*this==p);
+        }
+
+        template<class T=type, class = typename enable_if<is_arithmetic<T>::value>::type> void initialize_normal(double mean, double dev) {
+            if (!is_double()) {
+                throw invalid_argument("Function void initialize_normal(double mean, double dev) is only implemented for double typed params/vars");
+            }
+            std::default_random_engine generator;
+            std::normal_distribution<type> distribution(mean,dev);
+            for (size_t i = 0; i<_val->size(); i++) {
+                _val->at(i) = distribution(generator);
             }
         }
-        
-        void initialize(size_t i, type v) {
-            set_val(i,v);
-        }
-        
-        param& operator=(type v) {
-            if (_is_indexed) {
-                _val->at(_ids->at(0).back()) = v;
+
+
+
+
+#ifdef USE_QPP
+        /* Matrix representation of a Quantum T gate */
+        void QuantumT(size_t qubit_pos, size_t nb_qubits, bool transpose=false) {
+            using namespace qpp;
+            if (transpose) {
+                auto U = gt.expandout(adjoint(gt.T), qubit_pos, nb_qubits);
+                Debug("T transpose matrix at position " << to_string(qubit_pos) <<" = " << endl);
+                Debug(disp(U) << "\n");
+                set_vals(U.sparseView());
             }
             else {
-                _val->push_back(v);
-                _dim[0]++;
+                auto U = gt.expandout(gt.T, qubit_pos, nb_qubits);
+                Debug("T matrix at position " << to_string(qubit_pos) <<" = " << endl);
+                Debug(disp(U) << "\n");
+                set_vals(U.sparseView());
             }
-            update_range(v);
+        }
+
+        /* Matrix representation of a Quantum Hadamard gate */
+        void QuantumH(size_t qubit_pos, size_t nb_qubits) {
+            using namespace qpp;
+            auto U = gt.expandout(gt.H, qubit_pos, nb_qubits);
+            Debug("H matrix at position " << to_string(qubit_pos) <<" = " << endl);
+            Debug(disp(U) << "\n");
+            set_vals(U.sparseView());
+        }
+
+        /* Matrix representation of a Quantum Rx gate */
+        void QuantumRx(size_t qubit_pos, size_t nb_qubits) {
+            using namespace qpp;
+            auto U = gt.expandout(gt.Rn(pi/2, {1,0,0}), qubit_pos, nb_qubits);
+            Debug("Rx matrix at position " << to_string(qubit_pos) <<" = " << endl);
+            Debug(disp(U) << "\n");
+            set_vals(U.sparseView());
+        }
+
+        /* Matrix representation of a Quantum S gate */
+        void QuantumS(size_t qubit_pos, size_t nb_qubits) {
+            using namespace qpp;
+            auto U = gt.expandout(gt.S, qubit_pos, nb_qubits);
+            Debug("S matrix at position " << to_string(qubit_pos) <<" = " << endl);
+            Debug(disp(U) << "\n");
+            set_vals(U.sparseView());
+            Debug(to_str(true));
+        }
+
+
+        /* Matrix representation of a Quantum S conjugate gate */
+        void QuantumSt(size_t qubit_pos, size_t nb_qubits) {
+            using namespace qpp;
+            auto U = gt.expandout(adjoint(gt.S), qubit_pos, nb_qubits);
+            Debug("S* matrix at position " << to_string(qubit_pos) <<" = " << endl);
+            Debug(disp(U) << "\n");
+            set_vals(U.sparseView());
+            Debug(to_str(true));
+        }
+
+        /* Matrix representation of a Quantum Cnot gate with qc as control qubit and qt as target one */
+        void QuantumCnot(size_t qc, size_t qt, size_t nb_qubits) {
+            using namespace qpp;
+            auto U = gt.expandout(gt.CTRL(gt.X, {qc}, {qt}, nb_qubits), 0, 1, pow(2,nb_qubits));
+            Debug("Cnot matrix from " << to_string(qc) << " to " << to_string(qt) << " = " << endl);
+            Debug(disp(U) << "\n");
+            set_vals(U.sparseView());
+            Debug(to_str(true));
+        }
+        /* Matrix representation of a Quantum Swap gate with qc and qt as the selected qubits */
+        void QuantumSwap(size_t qc, size_t qt, size_t nb_qubits) {
+            using namespace qpp;
+            auto M1 = gt.expandout(gt.H, qc, nb_qubits);
+            auto M2 = gt.expandout(gt.H, qt, nb_qubits);
+            auto M3 = gt.expandout(gt.CTRL(gt.X, {qc}, {qt}, nb_qubits), 0, 1, pow(2,nb_qubits));
+            auto U = M3*M1*M2*M3*M1*M2*M3;
+            Debug("Swap matrix from " << to_string(qc) << " to " << to_string(qt) << " = " << endl);
+            Debug(disp(U) << "\n");
+            set_vals(U.sparseView());
+            Debug(to_str(true));
+        }
+#endif
+
+        param& operator=(type v) {
+            if(_indices){
+                set_val(v);
+            }
+            else {
+                add_val(v);
+            }
             return *this;
         }
-        
-        template<typename... Args>
-        param operator()(size_t t1, Args&&... args) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            list<size_t> indices;
-            indices = {forward<size_t>(args)...};
-            indices.push_front(t1);
-            string key;
-            auto it = indices.begin();
-            for (size_t i= 0; i< indices.size(); i++) {
-                key += to_string(*it);
-                if (i<indices.size()-1) {
-                    key += ",";
-                }
-                it++;
-            }
-            size_t index = 0;
-            if (indices.size()==2) {
-                _is_matrix = true;
-                _dim.resize(2);
-                _dim[0] = max(_dim[0],indices.front()+1);
-                _dim[1] = max(_dim[1],indices.back()+1);
-                index = _dim[1]*indices.front()+indices.back();
+
+        param& operator=(const initializer_list<type>& l) {
+            if(_indices){
+                for(auto &v:l)
+                    set_val(v);
             }
             else {
-                _dim[0] = max(_dim[0],indices.front()+1);
-                index = indices.front();
+                for(auto &v:l)
+                    add_val(v);
             }
-            auto pp = param_::_indices->insert(make_pair<>(key,index));
-            if(pp.second) { //new index inserted
-                _val->resize(max(_val->size(),index+1));
-                _rev_indices->resize(_val->size());
-                _rev_indices->at(index) = key;
-                res._ids->at(0).push_back(index);
+            return *this;
+        }
+
+        param operator()(size_t i, size_t j){
+            if(!is_matrix()){
+                throw invalid_argument("Current param/var is not a matrix, cannot call: param(i,j).");
             }
-            else {
-                res._ids->at(0).push_back(pp.first->second);
+            param res(*this);
+            if(!res._indices){
+                res._indices = make_shared<indices>();
             }
-            res._dim[0]=1;
-            res._name += "["+key+"]";
-            res._unique_id = make_tuple<>(res._id,unindexed_,typeid(type).hash_code(), indices.front(), indices.back());
-            res._is_indexed = true;
-            //_is_indexed = true; // Guanglei added this line.
+            res._indices->_ids = make_shared<vector<vector<size_t>>>();
+            res._indices->_ids->resize(1);
+            if (_is_transposed) {
+                res._indices->_ids->at(0).push_back(j*_dim[0]+i);
+            }
+            else{
+                res._indices->_ids->at(0).push_back(i*_dim[1]+j);
+            }
+            res._name += "["+to_string(i)+","+to_string(j)+"]";
             return res;
         }
-        
-        template<typename... Args>
-        param operator()(string t1, Args&&... args) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            list<string> indices;
-            //indices = {forward<size_t>(args)...};
-            indices = {forward<Args>(args)...};
-            indices.push_front(t1);
-            string key;
-            auto it = indices.begin();
-            for (int i= 0; i < indices.size(); i++) {
-                key += *it;
-                if (i< indices.size()-1) {
-                    key += ",";
-                }
-                it++;
+
+        param operator()(size_t idx) {
+            if(!_indices){
+                throw invalid_argument("Current param/var is not indexed.");
             }
-            if (indices.size()==2) {
-                _is_matrix = true;
-            }
-            auto index = param_::_indices->size();
-            auto pp = param_::_indices->insert(make_pair<>(key,index));
-            if(pp.second) { //new index inserted
-                _val->resize(max(_val->size(),index+1));
-                _dim[0] = max(_dim[0],_val->size());
-                _rev_indices->resize(_val->size());
-                _rev_indices->at(index) = key;
-                res._ids->at(0).push_back(param_::_indices->size()-1);
-            }
-            else {
-                res._ids->at(0).push_back(pp.first->second);
-            }
-            res._dim[0]=1;
-            res._name += "["+key+"]";
-            res._unique_id = make_tuple<>(res._id,unindexed_,typeid(type).hash_code(), res._ids->at(0).at(0), res._ids->at(0).at(res._ids->at(0).size()-1));
-            res._is_indexed = true;
+            param res(*this);
+            res._name += "["+to_string(idx)+"]";
+            res._indices->_ids = make_shared<vector<vector<size_t>>>();
+            res._indices->_ids->resize(1);
+            res._indices->_ids->at(0).push_back(idx);
+            res._dim[0] = 1;
             return res;
         }
-        
-        
+
+        template<bool...> struct bool_pack;
+        template<bool... bs>
+        using all_true = std::is_same<bool_pack<bs..., true>, bool_pack<true, bs...>>;
+        template<class R, class... Ts>
+        using are_all_convertible = all_true<std::is_convertible<Ts, R>::value...>;
+
+        template<typename... Args, typename = typename enable_if<are_all_convertible<string, Args...>::value>::type>
+        param operator()(string key1, Args&&... args) {
+            if(!_indices){
+                throw invalid_argument("Current param/var is not indexed.");
+            }
+            param res(*this);
+            auto key = index_(key1, args...);
+            auto it1 = _indices->_keys_map->find(key._name);
+            if (it1 == _indices->_keys_map->end()){
+                throw invalid_argument("In operator()(string key1, Args&&... args), unknown key");
+            }
+            res._name += "["+key._name+"]";
+            res._indices->_ids = make_shared<vector<vector<size_t>>>();
+            res._indices->_ids->resize(1);
+            res._indices->_ids->at(0).push_back(it1->second);
+            res._dim[0] = 1;
+            return res;
+        }
+
+        /* Use this for dense indexing, prefer indices() for sparse indexing */
+        param& in(const space& s){
+            set_size(s._dim);
+            if(s._dim.size()==1){ /* We can afford to build indices since this is a 1-d set */
+                this->_indices = make_shared<indices>(indices(0,s._dim[0]-1));
+            }
+            return *this;
+        }
+
         param in(const node_pairs& np){
-            auto p = this->in(np._keys);
-            p._name += np._name;
-            return p;
-        }
-                
-//        template<typename Tobj> param in(const vector<Tobj>& vec) {
-//            return in(get_ptr_vec(vec));
-//        }
-//        
-//        template<typename Tobj> param from(const vector<Tobj>& vec) {
-//            return from(get_ptr_vec(vec));
-//        }
-//        
-//        template<typename Tobj> param to(const vector<Tobj>& vec) {
-//            return to(get_ptr_vec(vec));
-//        }
-        
-        template<typename Tobj> param in(const vector<Tobj>& vec) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            if(vec.empty()){
-                DebugOn("In function param.in(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                res._is_indexed = true;
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)._active) {
-                    continue;
-                }
-                key = (*it)._name;
-                auto index = _indices->size();
-                auto pp = param_::_indices->insert(make_pair<>(key, index));
-                if(pp.second) { //new index inserted
-                    _val->resize(max(_val->size(),index+1));
-                    _dim[0] = max(_dim[0],_val->size());
-                    _rev_indices->resize(_val->size());
-                    _rev_indices->at(index) = key;
-                    res._ids->at(0).push_back(index);
-                }
-                else {
-                    res._ids->at(0).push_back(pp.first->second);
-                }
-            }
-            DebugOff(endl);
-            res._dim[0]=res._ids->at(0).size();
-            res._name += ".in_" + vec.front()._type_name;
-            res._unique_id = make_tuple<>(res._id,in_, typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        template<typename... Args>
-        param prev(const indices& vec1, Args&&... args) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            list<indices> vecs;
-            vecs = {forward<Args>(args)...};
-            vecs.push_front(vec1);
-            if(vecs.size()==1 && res._indices->size()==0){
-                res._indices = vec1._indices_map;
-                res._rev_indices = vec1._indices;
-                _indices = vec1._indices_map;
-                _rev_indices = vec1._indices;
-                auto dim = res._indices->size();
-                for(unsigned idx = 0; idx < dim;idx++){
-                    if(vec1._excluded_indices.count(idx)==0){
-                        res._ids->at(0).push_back(idx-1);
-                    }
-                }
-                dim =res._ids->at(0).size();
-                _val->resize(dim);
-                _dim[0] = dim;
-                res._val->resize(dim);
-                res._dim[0]= dim;
-                res._name += ".prev";
-                res._unique_id = make_tuple<>(res._id,prev_, typeid(indices).hash_code(), 0,res._dim[0]);
-                res._is_indexed = true;
-                return res;
-                
-            }
-            size_t dim = 1;
-            vector<size_t> dims;
-            for(auto &vec: vecs){
-                dim *= vec.size();
-                dims.push_back(vec.size());
-            }
-            unsigned den = 1;
-            size_t real_idx = 0;
-            for(size_t idx = 0; idx < dim ; idx++){
-                bool excluded = false;
-                string key;
-                den = dim;
-                for(auto it = vecs.begin(); it!= vecs.end(); it++) {
-                    auto vec = &(*it);
-                    den /= vec->size();
-                    real_idx = (idx/den)%vec->size();
-                    if(vec->_excluded_indices.count(real_idx)!=0){
-                        excluded = true;
-                        break;
-                    }
-                    key += vec->_indices->at(real_idx-1);
-                    if(next(it)!=vecs.end()){
-                        key += ",";
-                    }
-                }
-                if(excluded){
-                    continue;
-                }
-                auto index = _indices->size();
-                auto pp = param_::_indices->insert(make_pair<>(key, index));
-                if(pp.second) { //new index inserted
-                    _val->resize(max(_val->size(),index+1));
-                    _dim[0] = max(_dim[0],_val->size());
-                    _rev_indices->resize(_val->size());
-                    _rev_indices->at(index) = key;
-                    res._ids->at(0).push_back(index);
-                    Debug(key << "; ");
-                }
-                else {
-                    res._ids->at(0).push_back(pp.first->second);
-                }
-            }
-            Debug(endl);
-            res._dim[0]=res._ids->at(0).size();
-            res._name += ".prev";
-            res._unique_id = make_tuple<>(res._id,prev_, typeid(indices).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-                
-        template<typename Tobj> param min_time(const vector<Tobj*>& vec, const indices& ids, const param<int>& time){
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            res._is_vector = _is_vector;
-            res._is_matrix = _is_matrix;
-            res._is_transposed = _is_transposed;
-            if(vec.empty()){
-                DebugOn("In function param.out_arcs(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                res._is_indexed = true;
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            unsigned inst = 0;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                
-                for (auto i=0; i< ids.size();i++) {
-                    if (inst>0) {
-                        res._ids->push_back(vector<unsigned>());
-                        res._dim.push_back(0);
-                    }
-                    if(ids._excluded_indices.count(i)!=0){
-                        continue;
-                    }
-                    for (auto j=i; j< min(i+time.eval((*it)->_name),(int)ids.size()); j++) {
-                        if(ids._excluded_indices.count(j)!=0){
-                            continue;
-                        }
-                        key = (*it)->_name +","+ids._indices->at(j);
-                        auto index = _indices->size();
-                        auto pp = param_::_indices->insert(make_pair<>(key, index));
-                        if(pp.second) { //new index inserted
-                            _val->resize(max(_val->size(),index+1));
-                            _dim[0] = max(_dim[0],_val->size());
-                            _rev_indices->resize(_val->size());
-                            _rev_indices->at(index) = key;
-                            res._ids->at(inst).push_back(index);
-                        }
-                        else {
-                            res._ids->at(inst).push_back(pp.first->second);
-                        }
-                    }
-                    res._dim[inst]=res._ids->at(inst).size();
-                    ++inst;
-                }
-            }
-            res._unique_id = make_tuple<>(res._id,min_time_, typeid(Tobj).hash_code(), 0,res._dim.size());
-            res._is_indexed = true;
-            return res;
-        }
-        
-        int nthOccurrence(const std::string& str, const std::string& findMe, int nth)
-        {
-            size_t  pos = 0;
-            int     cnt = 0;
-            
-            while( cnt != nth )
-            {
-                pos+=1;
-                pos = str.find(findMe, pos);
-                if ( pos == std::string::npos )
-                    return -1;
-                cnt++;
-            }
-            return pos;
+            return this->in(np._keys);
         }
 
         
         template<typename... Args>
-        param in(const indices& vec1, Args&&... args) {            
+        param in(const indices& vec1, Args&&... args) {
             auto ids = indices(vec1,args...);
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._time_extended = _time_extended;
-            if(_indices->empty()){
-                res._time_extended = vec1._time_extended;
-                _time_extended = vec1._time_extended;
+            if(!ids._excluded_keys.empty()){
+                ids.remove_excluded();
             }
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            if(ids._excluded_indices.empty() && res._time_extended==ids._time_extended && (res._indices->size()==ids.size() || res._indices->size()==0)){
-                _indices = ids._indices_map;
-                _rev_indices = ids._indices;
+            if(!_indices || _indices->empty()){/**< No need to add each key individually */
+                _indices = make_shared<indices>(ids);
                 auto dim = _indices->size();
                 _val->resize(dim);
-                _dim[0] = dim;
-                res._indices = _indices;
-                res._rev_indices = _rev_indices;
-                res._dim = _dim;
-                res._unique_id = _unique_id;                
-                return res;
-            }
-            if(res._indices->size()==0){
-                res._time_extended = ids._time_extended;
-                _indices = ids._indices_map;
-                _rev_indices = ids._indices;
-                res._indices = _indices;
-                res._rev_indices = _rev_indices;
-                auto dim = _indices->size();
-                _val->resize(dim);
-                _dim[0] = dim;
-                for(unsigned idx = 0; idx < dim;idx++){
-                    if(ids._excluded_indices.count(idx)==0){
-                        res._ids->at(0).push_back(idx);
+                if(ids._type==matrix_){
+                    if(_is_transposed){
+                        _dim[0] = ids._dim->at(1);
+                        _dim[1] = ids._dim->at(0);
+                    }
+                    else {
+                        _dim[1] = ids._dim->at(0);
+                        _dim[0] = ids._dim->at(1);
                     }
                 }
-                dim = res._ids->at(0).size();
-                res._dim[0]= dim;
-                if(dim>0){
-                    res._name += ".in_indices("+vec1._indices->at(0)+","+vec1._indices->at(vec1._indices->size()-1)+")";
+                else {
+                    if(_is_transposed){
+                        _dim[1] = dim;
+                    }
+                    else {
+                        _dim[0] = dim;
+                    }
                 }
-                else{
-                    res._name += ".empty_index_set";
+                param res(*this);
+                res._name += ".in("+ids._name+")";
+                return res;
+            }
+            string key, excluded;
+            size_t nb_inst=1;
+            param res(*this);
+            if(ids.is_indexed()){/* Double-indexed set */
+                size_t idx_excl = 0;
+                nb_inst = ids._ids->size();
+                //TODO check that the current param has the keys found in ids
+                bool has_all_keys = true;
+                for(auto key: *ids._keys){
+                    if(ids._excluded_keys.count(idx_excl++)!=0){
+                        continue;
+                    }
+                    auto it1 = _indices->_keys_map->find(key);
+                    if (it1 == _indices->_keys_map->end()){
+                        has_all_keys = false;
+                        break;
+                    }
                 }
-                res._unique_id = make_tuple<>(res._id,in_, typeid(indices).hash_code(), 0,dim);
-                res._is_indexed = true;
+                if(has_all_keys){
+                    res._indices = make_shared<indices>(ids);
+                    if(res._is_transposed){
+                        res._dim[1]=_indices->size();
+                    }
+                    else {
+                        res._dim[0]=_indices->size();
+                    }
+                    res._name += ".in("+ids._name+")";
+                    return res;
+                }
+                res._indices->_ids = make_shared<vector<vector<size_t>>>();
+                res._indices->_ids->resize(nb_inst);
+                auto nb_sep1 = count(_indices->_keys->front().begin(), _indices->_keys->front().end(), ',');
+                auto nb_sep2 = count(ids._keys->front().begin(), ids._keys->front().end(), ',');
+                int pos = 0;
+                if(nb_sep2>nb_sep1){
+                    pos = nthOccurrence(ids._keys->front(), ",", nb_sep2-nb_sep1);
+                }
+                else if(nb_sep1>nb_sep2){
+                    pos = nthOccurrence(_indices->_keys->front(), ",", nb_sep1-nb_sep2);
+                }
+                for(size_t inst = 0; inst<nb_inst;inst++){
+                    auto nb_idx = ids._ids->at(inst).size();
+                    res._indices->_ids->at(inst).resize(nb_idx);
+                    for(size_t idx = 0; idx<nb_idx; idx++){
+                        key = ids._keys->at(ids._ids->at(inst).at(idx));
+                        if(ids._excluded_keys.count(idx)!=0){
+                            excluded += key + ",";
+                            continue;
+                        }
+                        if(_indices->_type==to_ || _indices->_type==from_){
+                            string pref;
+                            if(nb_sep2>2){/* key has a prefix */
+                                pref = key.substr(0, key.find_last_of(","));
+                                pref = pref.substr(0, pref.find_last_of(","));
+                                pref = pref.substr(0, pref.find_last_of(",")+1);
+                            }
+                            if(_indices->_type==to_){
+                                key = pref+key.substr(key.find_last_of(",")+1,key.size());
+                            }
+                            else if(_indices->_type==from_){
+                                key = key.substr(0, key.find_last_of(","));
+                                key = pref+key.substr(key.find_last_of(",")+1,key.size());
+                            }
+                        }
+                        else {
+                            /* Compare indexing and truncate extra indices */
+                            if(nb_sep2>nb_sep1){
+                                key = key.substr(pos+1);
+                            }
+                            else if(nb_sep1>nb_sep2){
+                                key = _indices->_keys->front().substr(0,pos) + "," + key;
+                            }
+                        }
+                        auto it1 = _indices->_keys_map->find(key);
+                        if (it1 == _indices->_keys_map->end()){
+                            throw invalid_argument("In function param.in(const vector<Tobj>& vec), vec has unknown key");
+                        }
+                        res._indices->_ids->at(inst).at(idx) = it1->second;
+                    }
+                }
+                res._name += ".in("+ids._name+")";
+                if(res._is_transposed){
+                    res._dim[1]=res._indices->size();
+                }
+                else {
+                    res._dim[0]=res._indices->size();
+                }
                 return res;
             }
             size_t idx = 0;
-            for(auto key: *ids._indices){
-                if(ids._excluded_indices.count(idx++)!=0){
-                    continue;
-                }
-                if(!res._time_extended && ids._time_extended){
-                    auto pos = nthOccurrence(key, ",", ids._time_pos);
-                    key = key.substr(0,pos);
-                }
-                if(res._indices->size()==1 && res._rev_indices->at(0).compare(key)!=0){
-                    key = res._rev_indices->at(0);
-                }
-                if(ids._time_extended){//TODO is this if needed here?
-                    auto nb_sep1 = count(_rev_indices->front().begin(), _rev_indices->front().end(), ',')+1;
-                    auto nb_sep2 = count(key.begin(), key.end(), ',')+1;
-                    if(nb_sep2>nb_sep1){//some extra indices to be removed
-                        auto pos = nthOccurrence(key, ",", nb_sep1);
-                        key = key.substr(0,pos);
-                    }
-                    else if(nb_sep1>nb_sep2){//some extra indices to be removed
-                        throw invalid_argument("Indexing issue: nb_sep1>nb_sep2");
-                    }
-                }
-                auto index = _indices->size();
-                auto pp = param_::_indices->insert(make_pair<>(key, index));
-                if(pp.second) { //new index inserted
-                    _val->resize(max(_val->size(),index+1));
-                    _dim[0] = max(_dim[0],_val->size());
-                    _rev_indices->resize(_val->size());
-                    _rev_indices->at(index) = key;
-                    res._ids->at(0).push_back(index);
-                    Debug(key << "; ");
-                }
-                else {
-                    res._ids->at(0).push_back(pp.first->second);
-                }
-            }
-            Debug(endl);
-            res._dim[0]=res._ids->at(0).size();
-            if(res._dim[0]>0){
-                res._name += ".in_indices("+vec1._indices->at(0)+","+vec1._indices->at(vec1._indices->size()-1)+")";
-            }
-            else{
-                res._name += ".empty_index_set";
-            }
-            res._unique_id = make_tuple<>(res._id,in_, typeid(indices).hash_code(), 0,res._dim[0]*res._dim.size());
-            res._is_indexed = true;
-            return res;
-        }
-        
-        template<typename Tobj> param in(const vector<Tobj*>& vec) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            if(vec.empty()){
-                DebugOn("In function param.in(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                res._is_indexed = true;
+            res._indices->_ids = make_shared<vector<vector<size_t>>>();
+            res._indices->_ids->resize(1);
+            if(ids.empty()){
+                DebugOn("In function param.in(const indices& index_set1, Args&&... args), all index sets are empty!\n. Creating and empty variable! Check your sum/product operators.\n");
+                res._name += "_EMPTY";
                 return res;
             }
-            DebugOff(_name << " = ");
-            string key;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                key = (*it)->_name;
-                auto index = _indices->size();
-                auto pp = param_::_indices->insert(make_pair<>(key, index));
-                if(pp.second) { //new index inserted
-                    _val->resize(max(_val->size(),index+1));
-                    _dim[0] = max(_dim[0],_val->size());
-                    _rev_indices->resize(_val->size());
-                    _rev_indices->at(index) = key;
-                    res._ids->at(0).push_back(index);
+            auto nb_sep1 = count(_indices->_keys->front().begin(), _indices->_keys->front().end(), ',');
+            auto nb_sep2 = count(ids._keys->front().begin(), ids._keys->front().end(), ',');
+            int pos = 0;
+            bool is_prefix = false, is_suffix = false;
+            if(_indices->_type!=to_ && _indices->_type!=from_ && nb_sep2>nb_sep1){
+                pos = nthOccurrence(ids._keys->front(), ",", nb_sep2-nb_sep1);
+                key = ids._keys->front().substr(pos+1);
+                auto it1 = _indices->_keys_map->find(key);
+                if (it1 == _indices->_keys_map->end()){
+                    pos = nthOccurrence(ids._keys->front(), ",", nb_sep1+1);
+                    key = ids._keys->front().substr(0,pos);
+                    it1 = _indices->_keys_map->find(key);
+                    if (it1 == _indices->_keys_map->end()){
+                        throw invalid_argument("In function param.in(const vector<Tobj>& vec), vec has unknown key");
+                    }
+                    else {
+                        is_prefix = true;
+                    }
                 }
                 else {
-                    res._ids->at(0).push_back(pp.first->second);
+                    is_suffix = true;
                 }
             }
-            DebugOff(endl);
-            res._dim[0]=res._ids->at(0).size();
-            res._name += ".in_" + vec.front()->_type_name;
-            res._unique_id = make_tuple<>(res._id,in_, typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
+            else if(_indices->_type!=to_ && _indices->_type!=from_ && nb_sep1>nb_sep2){
+                pos = nthOccurrence(_indices->_keys->front(), ",", nb_sep1-nb_sep2);
+                key = _indices->_keys->front().substr(0,pos) + "," + ids._keys->front();
+                auto it1 = _indices->_keys_map->find(key);
+                if (it1 == _indices->_keys_map->end()){
+                    pos = nthOccurrence(_indices->_keys->front(), ",", nb_sep2+1);
+                    key = ids._keys->front()+ "," + _indices->_keys->front().substr(pos+1);
+                    it1 = _indices->_keys_map->find(key);
+                    if (it1 == _indices->_keys_map->end()){
+                        throw invalid_argument("In function param.in(const vector<Tobj>& vec), vec has unknown key");
+                    }
+                    else {
+                        is_prefix = true;
+                    }
+                }
+                else {
+                    is_suffix = true;
+                }
+            }
+            for(auto key: *ids._keys){
+                if(ids._excluded_keys.count(idx++)!=0){
+                    excluded += key + ",";
+                    continue;
+                }
+                if(_indices->_type==to_ || _indices->_type==from_){
+                    string pref;
+                    if(nb_sep2>2){/* key has a prefix */
+                        pref = key.substr(0, key.find_last_of(","));
+                        pref = pref.substr(0, pref.find_last_of(","));
+                        pref = pref.substr(0, pref.find_last_of(",")+1);
+                    }
+                    if(_indices->_type==to_){
+                        key = pref+key.substr(key.find_last_of(",")+1,key.size());
+                    }
+                    else if(_indices->_type==from_){
+                        key = key.substr(0, key.find_last_of(","));
+                        key = pref+key.substr(key.find_last_of(",")+1,key.size());
+                    }
+                }
+                else {
+                    /* Compare indexing and truncate extra indices */
+                    if(nb_sep2>nb_sep1){
+                        if(is_suffix){
+                            pos = nthOccurrence(key, ",", nb_sep2-nb_sep1);
+                            key = key.substr(pos+1);
+                        }
+                        else {
+                            pos = nthOccurrence(key, ",", nb_sep1+1);
+                            key = key.substr(0,pos);
+                        }
+                    }
+                    else if(nb_sep1>nb_sep2){
+                        if(is_suffix){
+                            key = _indices->_keys->front().substr(0,pos) + "," + key;
+                        }
+                        else {
+                            key = ids._keys->front()+ "," + _indices->_keys->front().substr(pos+1);
+                        }
+                    }
+                }
+                auto it1 = _indices->_keys_map->find(key);
+                if (it1 == _indices->_keys_map->end()){
+                    throw invalid_argument("In function param.in(const vector<Tobj>& vec), vec has unknown key");
+                }
+                res._indices->_ids->at(0).push_back(it1->second);
+            }
+            if(res._is_transposed){
+                res._dim[1]=res._indices->_ids->at(0).size();
+            }
+            else {
+                res._dim[0]=res._indices->_ids->at(0).size();
+            }
+            res._name += ".in("+ids._name+")";
+            if(!excluded.empty()){
+                excluded = excluded.substr(0,excluded.size()-1); /* remove last comma */
+                res._name += "\{" + excluded + "}";
+            }
+            return res;
+        }
+
+
+        param in_pairs(const indices& ids) {
+            param res(*this);
+            res._indices->_ids = make_shared<vector<vector<size_t>>>();
+            res._indices->_ids->resize(1);
+            if(ids.empty()){
+                DebugOn("In function param.in(const indices& index_set1, Args&&... args), all index sets are empty!\n. Creating and empty variable! Check your sum/product operators.\n");
+                res._name += "_EMPTY";
+                return res;
+            }
+            string key, excluded;
+            size_t idx = 0;
+            for(auto key: *ids._keys){
+                key = key.substr(key.find_first_of(",")+1,key.size());
+                if(ids._excluded_keys.count(idx++)!=0){
+                    excluded += key + ",";
+                    continue;
+                }
+                auto it1 = _indices->_keys_map->find(key);
+                if (it1 == _indices->_keys_map->end()){
+                    throw invalid_argument("In function param.in_pairs(const indices& ids), ids has unknown key");
+                }
+                res._indices->_ids->at(0).push_back(it1->second);
+            }
+            if(res._is_transposed){
+                res._dim[1]=res._indices->_ids->at(0).size();
+            }
+            else {
+                res._dim[0]=res._indices->_ids->at(0).size();
+            }
+            res._name += ".in_pairs("+ids._name+")";
+            if(!excluded.empty()){
+                excluded = excluded.substr(0,excluded.size()-1); /* remove last comma */
+                res._name += "\{" + excluded + "}";
+            }
+            return res;
+        }
+
+        param from(){
+            param<type> res(*this);
+            res._name += ".from";
+            res._indices->_type = from_;
             return res;
         }
         
-    
+        param from(const indices& ids){
+            return this->from().in(ids);
+        }
         
         
+        param to(){
+            param<type> res(*this);
+            res._name += ".to";
+            res._indices->_type = to_;
+            return res;
+        }
         
+        param to(const indices& ids){
+            return this->to().in(ids);
+        }
+
+        /* Index param/var based on incoming arcs out of nodes in vec */
         param in_arcs(const vector<Node*>& vec) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            res._is_vector = _is_vector;
-            res._is_matrix = _is_matrix;
-            res._is_transposed = _is_transposed;
+            param res(*this);
+            res._indices->_ids = make_shared<vector<vector<size_t>>>();
+            res._indices->_ids->resize(1);
             if(vec.empty()){
-                DebugOn("In function param.in_arcs(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                res._is_indexed = true;
+                DebugOn("In function param.in_arcs(const vector<Node*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
+                res._name += "_EMPTY";
                 return res;
             }
-            DebugOff(_name << " = ");
             string key;
-            unsigned inst = 0;
+            size_t inst = 0;
             for(auto it = vec.begin(); it!= vec.end(); it++) {
                 if(!(*it)->_active) {
                     continue;
                 }
                 if (inst>0) {
-                    res._ids->push_back(vector<unsigned>());
-                    res._dim.push_back(0);
+                    res._indices->_ids->push_back(vector<size_t>());
                 }
                 for (auto &a:(*it)->get_in()) {
                     if (!a->_active) {
                         continue;
                     }
                     key = a->_name;
-                    auto index = _indices->size();
-                    auto pp = param_::_indices->insert(make_pair<>(key, index));
-                    if(pp.second) { //new index inserted
-                        _val->resize(max(_val->size(),index+1));
-                        _dim[0] = max(_dim[0],_val->size());
-                        _rev_indices->resize(_val->size());
-                        _rev_indices->at(index) = key;
-                        res._ids->at(inst).push_back(index);
+                    auto it1 = _indices->_keys_map->find(key);
+                    if (it1 == _indices->_keys_map->end()){
+                        throw invalid_argument("In function param.in_arcs(const vector<Node*>& vec), unknown arc key.");
                     }
-                    else {
-                        res._ids->at(inst).push_back(pp.first->second);
-                    }
+                    res._indices->_ids->at(inst).push_back(it1->second);
                 }
-                res._dim[inst]=res._ids->at(inst).size();
                 ++inst;
             }
-            res._unique_id = make_tuple<>(res._id,in_arcs_, typeid(Node).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
+//            res._name += ".in_arcs";
             return res;
         }
-        
-        param in_arcs(const vector<Node*>& vec, const indices& T) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            res._is_vector = _is_vector;
-            res._is_matrix = _is_matrix;
-            res._is_transposed = _is_transposed;
-            if(vec.empty()){
-                DebugOn("In function param.in_arcs(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                res._is_indexed = true;
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            unsigned inst = 0;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                unsigned t=0;
-                for (auto &idx: *T._indices) {
-                    if (inst>0) {
-                        res._ids->push_back(vector<unsigned>());
-                        res._dim.push_back(0);
-                    }
-                    if(T._excluded_indices.count(t++)!=0){
-                        continue;
-                    }
-                    for (auto &a:(*it)->get_in()) {
-                        if (!a->_active) {
-                            continue;
-                        }
-                        key = a->_name;
-                        key += ","+idx;
-                        auto index = _indices->size();
-                        auto pp = param_::_indices->insert(make_pair<>(key, index));
-                        if(pp.second) { //new index inserted
-                            _val->resize(max(_val->size(),index+1));
-                            _dim[0] = max(_dim[0],_val->size());
-                            _rev_indices->resize(_val->size());
-                            _rev_indices->at(index) = key;
-                            res._ids->at(inst).push_back(index);
-                        }
-                        else {
-                            res._ids->at(inst).push_back(pp.first->second);
-                        }
-                    }
-                    res._dim[inst]=res._ids->at(inst).size();
-                    ++inst;
-                }
-            }
-            res._unique_id = make_tuple<>(res._id,in_arcs_, typeid(Node).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
+
+
+
+        /* Index param/var based on outgoing arcs out of nodes in vec */
         param out_arcs(const vector<Node*>& vec) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            res._is_vector = _is_vector;
-            res._is_matrix = _is_matrix;
-            res._is_transposed = _is_transposed;
+            param res(*this);
+            res._indices->_ids = make_shared<vector<vector<size_t>>>();
+            res._indices->_ids->resize(1);
             if(vec.empty()){
-                DebugOn("In function param.out_arcs(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                res._is_indexed = true;
+                DebugOn("In function param.in_arcs(const vector<Node*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
+                res._name += "_EMPTY";
                 return res;
             }
-            DebugOff(_name << " = ");
             string key;
-            unsigned inst = 0;
+            size_t inst = 0;
             for(auto it = vec.begin(); it!= vec.end(); it++) {
                 if(!(*it)->_active) {
                     continue;
                 }
                 if (inst>0) {
-                    res._ids->push_back(vector<unsigned>());
-                    res._dim.push_back(0);
+                    res._indices->_ids->push_back(vector<size_t>());
                 }
                 for (auto &a:(*it)->get_out()) {
                     if (!a->_active) {
                         continue;
                     }
                     key = a->_name;
-                    auto index = _indices->size();
-                    auto pp = param_::_indices->insert(make_pair<>(key, index));
-                    if(pp.second) { //new index inserted
-                        _val->resize(max(_val->size(),index+1));
-                        _dim[0] = max(_dim[0],_val->size());
-                        _rev_indices->resize(_val->size());
-                        _rev_indices->at(index) = key;
-                        res._ids->at(inst).push_back(index);
+                    auto it1 = _indices->_keys_map->find(key);
+                    if (it1 == _indices->_keys_map->end()){
+                        throw invalid_argument("In function param.in_arcs(const vector<Node*>& vec), unknown arc key.");
                     }
-                    else {
-                        res._ids->at(inst).push_back(pp.first->second);
-                    }
+                    res._indices->_ids->at(inst).push_back(it1->second);
                 }
-                res._dim[inst]=res._ids->at(inst).size();
                 ++inst;
             }
-            res._unique_id = make_tuple<>(res._id,out_arcs_, typeid(Node).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        param out_arcs(const vector<Node*>& vec, const indices& T) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            res._is_vector = _is_vector;
-            res._is_matrix = _is_matrix;
-            res._is_transposed = _is_transposed;
-            if(vec.empty()){
-                DebugOn("In function param.out_arcs(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                res._is_indexed = true;
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            unsigned inst = 0;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                auto t = 0;
-                for (auto &idx: *T._indices) {
-                    if (inst>0) {
-                        res._ids->push_back(vector<unsigned>());
-                        res._dim.push_back(0);
-                    }
-                    if(T._excluded_indices.count(t++)!=0){
-                        continue;
-                    }
-                    for (auto &a:(*it)->get_out()) {
-                        if (!a->_active) {
-                            continue;
-                        }
-                        key = a->_name;
-                        key += ","+idx;
-                        auto index = _indices->size();
-                        auto pp = param_::_indices->insert(make_pair<>(key, index));
-                        if(pp.second) { //new index inserted
-                            _val->resize(max(_val->size(),index+1));
-                            _dim[0] = max(_dim[0],_val->size());
-                            _rev_indices->resize(_val->size());
-                            _rev_indices->at(index) = key;
-                            res._ids->at(inst).push_back(index);
-                        }
-                        else {
-                            res._ids->at(inst).push_back(pp.first->second);
-                        }
-                    }
-                    res._dim[inst]=res._ids->at(inst).size();
-                    ++inst;
-                }
-            }
-            res._unique_id = make_tuple<>(res._id,out_arcs_, typeid(Node).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        
-        param in_gens(const vector<Node*>& vec) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            res._is_vector = _is_vector;
-            res._is_matrix = _is_matrix;
-            res._is_transposed = _is_transposed;
-            if(vec.empty()){
-                DebugOn("In function param.in_arcs(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                res._is_indexed = true;
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            unsigned inst = 0;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                if (inst>0) {
-                    res._ids->push_back(vector<unsigned>());
-                    res._dim.push_back(0);
-                }
-                for (auto &g:(*it)->get_gens()) {
-                    if (!g->_active) {
-                        continue;
-                    }
-                    key = g->_name;
-                    auto index = _indices->size();
-                    auto pp = param_::_indices->insert(make_pair<>(key, index));
-                    if(pp.second) { //new index inserted
-                        _val->resize(max(_val->size(),index+1));
-                        _dim[0] = max(_dim[0],_val->size());
-                        _rev_indices->resize(_val->size());
-                        _rev_indices->at(index) = key;
-                        res._ids->at(inst).push_back(index);
-                    }
-                    else {
-                        res._ids->at(inst).push_back(pp.first->second);
-                    }
-                }
-                res._dim[inst]=res._ids->at(inst).size();
-                ++inst;
-            }
-            res._unique_id = make_tuple<>(res._id,in_gens_, typeid(Node).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        
-        param in_pot_gens(const vector<Node*>& vec) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            res._is_vector = _is_vector;
-            res._is_matrix = _is_matrix;
-            res._is_transposed = _is_transposed;
-            if(vec.empty()){
-                DebugOn("In function param.in_pot_gens(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                res._is_indexed = true;
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            unsigned inst = 0;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                if (inst>0) {
-                    res._ids->push_back(vector<unsigned>());
-                    res._dim.push_back(0);
-                }
-                for (auto &g:(*it)->get_pot_gens()) {
-                    if (!g->_active) {
-                        continue;
-                    }
-                    key = g->_name;
-                    auto index = _indices->size();
-                    auto pp = param_::_indices->insert(make_pair<>(key, index));
-                    if(pp.second) { //new index inserted
-                        _val->resize(max(_val->size(),index+1));
-                        _dim[0] = max(_dim[0],_val->size());
-                        _rev_indices->resize(_val->size());
-                        _rev_indices->at(index) = key;
-                        res._ids->at(inst).push_back(index);
-                    }
-                    else {
-                        res._ids->at(inst).push_back(pp.first->second);
-                    }
-                }
-                res._dim[inst]=res._ids->at(inst).size();
-                ++inst;
-            }
-            res._unique_id = make_tuple<>(res._id,in_pot_gens_, typeid(Node).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        param in_pot_bats(const vector<Node*>& vec) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            res._is_vector = _is_vector;
-            res._is_matrix = _is_matrix;
-            res._is_transposed = _is_transposed;
-            if(vec.empty()){
-                DebugOn("In function param.in_pot_bats(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                res._is_indexed = true;
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            unsigned inst = 0;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                if (inst>0) {
-                    res._ids->push_back(vector<unsigned>());
-                    res._dim.push_back(0);
-                }
-                for (auto &g:(*it)->get_pot_bats()) {
-                    if (!g->_active) {
-                        continue;
-                    }
-                    key = g->_name;
-                    auto index = _indices->size();
-                    auto pp = param_::_indices->insert(make_pair<>(key, index));
-                    if(pp.second) { //new index inserted
-                        _val->resize(max(_val->size(),index+1));
-                        _dim[0] = max(_dim[0],_val->size());
-                        _rev_indices->resize(_val->size());
-                        _rev_indices->at(index) = key;
-                        res._ids->at(inst).push_back(index);
-                    }
-                    else {
-                        res._ids->at(inst).push_back(pp.first->second);
-                    }
-                }
-                res._dim[inst]=res._ids->at(inst).size();
-                ++inst;
-            }
-            res._unique_id = make_tuple<>(res._id,in_pot_bats_, typeid(Node).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        param in_gens(const vector<Node*>& vec, const indices& T) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            res._is_vector = _is_vector;
-            res._is_matrix = _is_matrix;
-            res._is_transposed = _is_transposed;
-            if(vec.empty()){
-                DebugOn("In function param.in_arcs(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                res._is_indexed = true;
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            unsigned inst = 0;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                auto t = 0;
-                for (auto &idx: *T._indices) {
-                    if (inst>0) {
-                        res._ids->push_back(vector<unsigned>());
-                        res._dim.push_back(0);
-                    }
-                    if(T._excluded_indices.count(t++)!=0){
-                        continue;
-                    }
-                    for (auto &g:(*it)->get_gens()) {
-                        if (!g->_active) {
-                            continue;
-                        }
-                        key = g->_name;
-                        key += ","+idx;
-                        auto index = _indices->size();
-                        auto pp = param_::_indices->insert(make_pair<>(key, index));
-                        if(pp.second) { //new index inserted
-                            _val->resize(max(_val->size(),index+1));
-                            _dim[0] = max(_dim[0],_val->size());
-                            _rev_indices->resize(_val->size());
-                            _rev_indices->at(index) = key;
-                            res._ids->at(inst).push_back(index);
-                        }
-                        else {
-                            res._ids->at(inst).push_back(pp.first->second);
-                        }
-                    }
-                    res._dim[inst]=res._ids->at(inst).size();
-                    ++inst;
-                }
-            }
-            res._unique_id = make_tuple<>(res._id,in_gens_, typeid(Node).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        param in_bats(const vector<Node*>& vec, const indices& T) {//TODO MERGE THIS WITH IN GENS AND OTHER FUNCS
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            res._is_vector = _is_vector;
-            res._is_matrix = _is_matrix;
-            res._is_transposed = _is_transposed;
-            if(vec.empty()){
-                DebugOn("In function param.in_bats(const vector<Tobj*>& vec, const indices& T), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                res._is_indexed = true;
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            unsigned inst = 0;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                auto t = 0;
-                for (auto &idx: *T._indices) {
-                    if (inst>0) {
-                        res._ids->push_back(vector<unsigned>());
-                        res._dim.push_back(0);
-                    }
-                    if(T._excluded_indices.count(t++)!=0){
-                        continue;
-                    }
-                    for (auto g:(*it)->get_bats()) {
-                        if (!g->_active) {
-                            continue;
-                        }
-                        key = g->_name;
-                        key += ","+idx;
-                        auto index = _indices->size();
-                        auto pp = param_::_indices->insert(make_pair<>(key, index));
-                        if(pp.second) { //new index inserted
-                            _val->resize(max(_val->size(),index+1));
-                            _dim[0] = max(_dim[0],_val->size());
-                            _rev_indices->resize(_val->size());
-                            _rev_indices->at(index) = key;
-                            res._ids->at(inst).push_back(index);
-                        }
-                        else {
-                            res._ids->at(inst).push_back(pp.first->second);
-                        }
-                    }
-                    res._dim[inst]=res._ids->at(inst).size();
-                    ++inst;
-                }
-            }
-            res._unique_id = make_tuple<>(res._id,in_bats_, typeid(Node).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        param in_pv(const vector<Node*>& vec, const indices& T) {//TODO MERGE THIS WITH IN GENS AND OTHER FUNCS
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            res._is_vector = _is_vector;
-            res._is_matrix = _is_matrix;
-            res._is_transposed = _is_transposed;
-            if(vec.empty()){
-                DebugOn("In function param.in_pv(const vector<Tobj*>& vec, const indices& T), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                res._is_indexed = true;
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            unsigned inst = 0;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                auto t = 0;
-                for (auto &idx: *T._indices) {
-                    if (inst>0) {
-                        res._ids->push_back(vector<unsigned>());
-                        res._dim.push_back(0);
-                    }
-                    if(T._excluded_indices.count(t++)!=0){
-                        continue;
-                    }
-                    for (auto &g:(*it)->get_pv()) {
-                        if (!g->_active) {
-                            continue;
-                        }
-                        key = g->_name;
-                        key += ","+idx;
-                        auto index = _indices->size();
-                        auto pp = param_::_indices->insert(make_pair<>(key, index));
-                        if(pp.second) { //new index inserted
-                            _val->resize(max(_val->size(),index+1));
-                            _dim[0] = max(_dim[0],_val->size());
-                            _rev_indices->resize(_val->size());
-                            _rev_indices->at(index) = key;
-                            res._ids->at(inst).push_back(index);
-                        }
-                        else {
-                            res._ids->at(inst).push_back(pp.first->second);
-                        }
-                    }
-                    res._dim[inst]=res._ids->at(inst).size();
-                    ++inst;
-                }
-            }
-            res._unique_id = make_tuple<>(res._id,in_pv_, typeid(Node).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        
-        param in_wind(const vector<Node*>& vec, const indices& T) {//TODO MERGE THIS WITH IN GENS AND OTHER FUNCS
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            res._is_vector = _is_vector;
-            res._is_matrix = _is_matrix;
-            res._is_transposed = _is_transposed;
-            if(vec.empty()){
-                DebugOn("In function param.in_wind(const vector<Tobj*>& vec, const indices& T), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                res._is_indexed = true;
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            unsigned inst = 0;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                auto t = 0;
-                for (auto &idx: *T._indices) {
-                    if (inst>0) {
-                        res._ids->push_back(vector<unsigned>());
-                        res._dim.push_back(0);
-                    }
-                    if(T._excluded_indices.count(t++)!=0){
-                        continue;
-                    }
-                    for (auto &g:(*it)->get_wind()) {
-                        if (!g->_active) {
-                            continue;
-                        }
-                        key = g->_name;
-                        key += ","+idx;
-                        auto index = _indices->size();
-                        auto pp = param_::_indices->insert(make_pair<>(key, index));
-                        if(pp.second) { //new index inserted
-                            _val->resize(max(_val->size(),index+1));
-                            _dim[0] = max(_dim[0],_val->size());
-                            _rev_indices->resize(_val->size());
-                            _rev_indices->at(index) = key;
-                            res._ids->at(inst).push_back(index);
-                        }
-                        else {
-                            res._ids->at(inst).push_back(pp.first->second);
-                        }
-                    }
-                    res._dim[inst]=res._ids->at(inst).size();
-                    ++inst;
-                }
-            }
-            res._unique_id = make_tuple<>(res._id,in_wind_, typeid(Node).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        template<typename Tobj> param in_pairs(const vector<Tobj*>& vec) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            if(vec.empty()){
-                DebugOff("In function param.in_pairs(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                key = (*it)->_src->_name + "," + (*it)->_dest->_name;
-                DebugOff(key<< ", ");
-                auto index = _indices->size();
-                auto pp = param_::_indices->insert(make_pair<>(key, index));
-                _val->resize(max(_val->size(),index+1));
-                _dim[0] = max(_dim[0],_val->size());
-                if(pp.second) { //new index inserted
-                    _rev_indices->resize(_val->size());
-                    _rev_indices->at(index) = key;
-                    res._ids->at(0).push_back(index);
-                }
-                else {
-                    res._ids->at(0).push_back(pp.first->second);
-                }
-            }
-            res._dim[0]=res._ids->at(0).size();
-            DebugOff(endl);
-            res._name += ".in_" + vec.front()->_type_name;
-            res._unique_id = make_tuple<>(res._id,in_,typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        
-        template<typename Tobj> param in_pairs(const vector<Tobj*>& vec, const indices& ids) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            if(vec.empty()){
-                DebugOff("In function param.in_pairs(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                auto t = 0;
-                for (auto &idx: *ids._indices) {
-                    if(ids._excluded_indices.count(t++)!=0){
-                        continue;
-                    }
-                    key = (*it)->_src->_name + "," + (*it)->_dest->_name;
-                    key += ","+idx;
-                    DebugOff(key<< ", ");
-                    
-                    auto index = _indices->size();
-                    auto pp = param_::_indices->insert(make_pair<>(key, index));
-                    _val->resize(max(_val->size(),index+1));
-                    _dim[0] = max(_dim[0],_val->size());
-                    if(pp.second) { //new index inserted
-                        _rev_indices->resize(_val->size());
-                        _rev_indices->at(index) = key;
-                        res._ids->at(0).push_back(index);
-                    }
-                    else {
-                        res._ids->at(0).push_back(pp.first->second);
-                    }
-                }
-            }
-            res._dim[0]=res._ids->at(0).size();
-            DebugOff(endl);
-            res._name += ".in_" + vec.front()->_type_name;
-            res._unique_id = make_tuple<>(res._id,in_,typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        
-        template<typename Tobj> param in_pairs(const vector<Tobj>& vec) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            if(vec.empty()){
-                DebugOff("In function param.in_pairs(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)._active) {
-                    continue;
-                }
-                key = (*it)._src->_name + "," + (*it)._dest->_name;
-                DebugOff(key<< ", ");
-                auto index = _indices->size();
-                auto pp = param_::_indices->insert(make_pair<>(key, index));
-                _val->resize(max(_val->size(), index+1));
-                _dim[0] = max(_dim[0],_val->size());
-                if(pp.second) { //new index inserted
-                    _rev_indices->resize(_val->size());
-                    _rev_indices->at(index) = key;
-                    res._ids->at(0).push_back(index);
-                }
-                else {
-                    res._ids->at(0).push_back(pp.first->second);
-                }
-            }
-            DebugOff(endl);
-            res._dim[0]=res._ids->at(0).size();
-            res._name += ".in_" + vec.front()._type_name;
-            res._unique_id = make_tuple<>(res._id,in_,typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        template<typename Tobj> param in_pairs(const vector<Tobj*>& vec, unsigned T) {
-            assert(T > 0);
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            if(vec.empty()){
-                DebugOff("In function param.in_pairs(const vector<Tobj*>& vec, unsigned T), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            for (unsigned t = 0; t < T; t++) {
-                for(auto it = vec.begin(); it!= vec.end(); it++) {
-                    if(!(*it)->_active) {
-                        continue;
-                    }
-                    key = (*it)->_src->_name + "," + (*it)->_dest->_name;
-                    key += ",";
-                    key += to_string(t);
-                    auto index = _indices->size();
-                    auto pp = param_::_indices->insert(make_pair<>(key, index));
-                    _val->resize(max(_val->size(), index+1));
-                    _dim[0] = max(_dim[0],_val->size());
-                    if(pp.second) { //new index inserted
-                        _rev_indices->resize(_val->size());
-                        _rev_indices->at(index) = key;
-
-                        res._ids->at(0).push_back(index);
-                    }
-                    else {
-                        res._ids->at(0).push_back(pp.first->second);
-                    }
-                }
-            }
-            DebugOff(endl);
-            res._dim[0]=res._ids->at(0).size();
-            res._name += ".in_" + string(typeid(Tobj).name()) + "_time_" + to_string(T);
-            res._unique_id = make_tuple<>(res._id, in_time_, typeid(Tobj).hash_code(),0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        template<typename Tobj> param from(const vector<Tobj*>& vec) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            if(vec.empty()){
-                DebugOff("In function param.from(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                key = (*it)->_src->_name;
-                DebugOff(key<< ", ");
-                auto index = _indices->size();
-                auto pp = param_::_indices->insert(make_pair<>(key, index));
-                _val->resize(max(_val->size(), index+1));
-                _dim[0] = max(_dim[0],_val->size());
-                if(pp.second) { //new index inserted
-                    _rev_indices->resize(_val->size());
-                    _rev_indices->at(index) = key;
-                    res._ids->at(0).push_back(index);
-                }
-                else {
-                    res._ids->at(0).push_back(pp.first->second);
-                }
-            }
-            DebugOff(endl);
-            res._dim[0]=res._ids->at(0).size();
-            if (get<1>(_unique_id)!=from_) {
-                res._name += ".from";
-            }
-            res._name += "_"+ vec.front()->_type_name;
-            res._unique_id = make_tuple<>(res._id,from_,typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        template<typename Tobj> param from(const vector<Tobj*>& vec, const indices& ids) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            if(vec.empty()){
-                DebugOff("In function param.from(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                auto t = 0;
-                for (auto &idx: *ids._indices) {
-                    if(ids._excluded_indices.count(t++)!=0){
-                        continue;
-                    }
-                    key = (*it)->_src->_name;
-                    key += ","+idx;
-                    DebugOff(key<< ", ");
-                    auto index = _indices->size();
-                    auto pp = param_::_indices->insert(make_pair<>(key, index));
-                    if(pp.second) { //new index inserted
-                        _val->resize(max(_val->size(), index+1));
-                        _dim[0] = max(_dim[0],_val->size());
-                        _rev_indices->resize(_val->size());
-                        _rev_indices->at(index) = key;
-                        res._ids->at(0).push_back(index);
-                    }
-                    else {
-                        res._ids->at(0).push_back(pp.first->second);
-                    }
-                }
-            }
-            DebugOff(endl);
-            res._dim[0]=res._ids->at(0).size();
-            if (get<1>(_unique_id)!=from_) {
-                res._name += ".from";
-            }
-            res._name += "_"+ vec.front()->_type_name;
-            res._unique_id = make_tuple<>(res._id,from_,typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        template<typename Tobj> param from(const vector<Tobj>& vec) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            if(vec.empty()){
-                DebugOff("In function param.from(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)._active) {
-                    continue;
-                }
-                key = (*it)._src->_name;
-                DebugOff(key<< ", ");
-                auto index = _indices->size();
-                auto pp = param_::_indices->insert(make_pair<>(key, index));
-                _val->resize(max(_val->size(), index+1));
-                _dim[0] = max(_dim[0],_val->size());
-                if(pp.second) { //new index inserted
-                    _rev_indices->resize(_val->size());
-                    _rev_indices->at(index) = key;
-                    res._ids->at(0).push_back(index);
-                }
-                else {
-                    res._ids->at(0).push_back(pp.first->second);
-                }
-            }
-            DebugOff(endl);
-            res._dim[0]=res._ids->at(0).size();
-            if (get<1>(_unique_id)!=from_) {
-                res._name += ".from";
-            }
-            res._name += "_"+ vec.front()._type_name;
-            res._unique_id = make_tuple<>(res._id,from_,typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
+//            res._name += ".out_arcs";
             return res;
         }
 
-        
-        
-        
-        template<typename Tobj> param to(const vector<Tobj*>& vec) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
+
+        /* Index param/var based on auxiliary objects attached to nodes in vec */
+        param in_aux(const vector<Node*>& vec, const string& aux_type) {
+            param res(*this);
+            res._indices->_ids = make_shared<vector<vector<size_t>>>();
             if(vec.empty()){
-                DebugOff("In function param.to(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
+                DebugOn("In function param.in_aux(const vector<Node*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
+                res._name += "_EMPTY";
                 return res;
             }
-            DebugOff(_name << " = ");
             string key;
+            size_t inst = 0;
             for(auto it = vec.begin(); it!= vec.end(); it++) {
                 if(!(*it)->_active) {
                     continue;
                 }
-                key = (*it)->_dest->_name;
-                DebugOff(key<< ", ");
-                auto index = _indices->size();
-                auto pp = param_::_indices->insert(make_pair<>(key, index));
-                _val->resize(max(_val->size(),index+1));
-                _dim[0] = max(_dim[0],_val->size());
-                if(pp.second) { //new index inserted
-                    _rev_indices->resize(_val->size());
-                    _rev_indices->at(index) = key;
-                    res._ids->at(0).push_back(index);
-                }
-                else {
-                    res._ids->at(0).push_back(pp.first->second);
-                }
-            }
-            res._dim[0]=res._ids->at(0).size();
-            if (get<1>(_unique_id)!=to_) {
-                res._name += ".to";
-            }
-            res._name += "_"+ vec.front()->_type_name;
-            res._unique_id = make_tuple<>(res._id,to_,typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        template<typename Tobj> param to(const vector<Tobj*>& vec, const indices& ids) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            if(vec.empty()){
-                DebugOff("In function param.to(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                auto t = 0;
-                for (auto &idx: *ids._indices) {
-                    if(ids._excluded_indices.count(t++)!=0){
+                res._indices->_ids->push_back(vector<size_t>());
+                for (auto &a:(*it)->get_aux(aux_type)) {
+                    if (!a->_active) {
                         continue;
                     }
-                    key = (*it)->_dest->_name;
-                    key += ","+idx;
-                
-                    DebugOff(key<< ", ");
-                    auto index = _indices->size();
-                    auto pp = param_::_indices->insert(make_pair<>(key, index));
-                    if(pp.second) { //new index inserted
-                        _val->resize(max(_val->size(),index+1));
-                        _dim[0] = max(_dim[0],_val->size());
-                        _rev_indices->resize(_val->size());
-                        _rev_indices->at(index) = key;
-                        res._ids->at(0).push_back(index);
+                    key = a->_name;
+                    auto it1 = _indices->_keys_map->find(key);
+                    if (it1 == _indices->_keys_map->end()){
+                        throw invalid_argument("In function param.in_aux(const vector<Node*>& vec), unknown arc key.");
                     }
-                    else {
-                        res._ids->at(0).push_back(pp.first->second);
-                    }
+                    res._indices->_ids->at(inst).push_back(it1->second);
                 }
+                ++inst;
             }
-            res._dim[0]=res._ids->at(0).size();
-            if (get<1>(_unique_id)!=to_) {
-                res._name += ".to";
-            }
-            res._name += "_"+ vec.front()->_type_name;
-            res._unique_id = make_tuple<>(res._id,to_,typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
+//            res._name += "("+aux_type+")";
             return res;
         }
-        
-        template<typename Tobj> param to(const vector<Tobj>& vec) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            if(vec.empty()){
-                DebugOff("In function param.to(const vector<Tobj*>& vec), vec is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                return res;
-            }
-            DebugOff(_name << " = ");
-            string key;
-            for(auto it = vec.begin(); it!= vec.end(); it++) {
-                if(!(*it)._active) {
-                    continue;
-                }
-                key = (*it)._dest->_name;
-                DebugOff(key<< ", ");
-                auto index = _indices->size();
-                auto pp = param_::_indices->insert(make_pair<>(key, index));
-                _val->resize(max(_val->size(),index+1));
-                _dim[0] = max(_dim[0],_val->size());
-                if(pp.second) { //new index inserted
-                    _rev_indices->resize(_val->size());
-                    _rev_indices->at(index) = key;
-                    res._ids->at(0).push_back(index);
-                }
-                else {
-                    res._ids->at(0).push_back(pp.first->second);
-                }
-            }
-            res._dim[0]=res._ids->at(0).size();
-            if (get<1>(_unique_id)!=to_) {
-                res._name += ".to";
-            }
-            res._name += "_"+ vec.front()._type_name;
-            res._unique_id = make_tuple<>(res._id,to_,typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        
-        param to() {
-            auto res(*this);
-            get<1>(res._unique_id) = to_;
-            res._name += ".to";
-            return res;
-        }
-        
-        param from() {
-            auto res(*this);
-            get<1>(res._unique_id) = from_;
-            res._name += ".from";
-            return res;
-        }
-        
-        param prev() {
-            auto res(*this);
-            get<1>(res._unique_id) = prev_;
-            res._name += ".prev";
-            return res;
-        }
-        
-        param min_time() {
-            auto res(*this);
-            get<1>(res._unique_id) = min_time_;
-            res._name += ".min_time";
-            return res;
-        }
-        
-        
-        param in_arcs() {
-            auto res(*this);
-            get<1>(res._unique_id) = in_arcs_;
-            res._name += ".incoming_arcs";
-            return res;
-        }
-        
-        param out_arcs() {
-            auto res(*this);
-            get<1>(res._unique_id) = out_arcs_;
-            res._name += ".outgoing_arcs";
-            return res;
-        }
-        
-        param in_gens() {
-            auto res(*this);
-            get<1>(res._unique_id) = in_gens_;
-            res._name += ".in_gens";
-            return res;
-        }
-        
-        param in_pot_gens() {
-            auto res(*this);
-            get<1>(res._unique_id) = in_pot_gens_;
-            res._name += ".in_pot_gens";
-            return res;
-        }
-        
-        param in_bats() {
-            auto res(*this);
-            get<1>(res._unique_id) = in_bats_;
-            res._name += ".in_bats";
-            return res;
-        }
-        
-        param in_pot_bats() {
-            auto res(*this);
-            get<1>(res._unique_id) = in_pot_bats_;
-            res._name += ".in_pot_bats";
-            return res;
-        }
-        
-        param in_wind() {
-            auto res(*this);
-            get<1>(res._unique_id) = in_wind_;
-            res._name += ".in_wind";
-            return res;
-        }
-        
-        param in_pv() {
-            auto res(*this);
-            get<1>(res._unique_id) = in_pv_;
-            res._name += ".in_pv";
-            return res;
-        }
-        
-        param in_pairs() {
-            auto res(*this);
-            get<1>(res._unique_id) = in_pairs_;
-            res._name += ".in_pairs";
-            return res;
-        }
-        
-        param excl(unsigned index) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices; res._indices = this->_indices;
-            for (unsigned i = 0; i<get_nb_instances(); i++) {
-                if (i!=index) {
-                    res._ids->at(0).push_back(i);
-                    res._dim[0]++;
-                }
-            }
-            res._name += ".excl(" +  to_string(index) +")"; // _name and _unique_id should be really unique.
-            res._unique_id = make_tuple<>(res._id, in_ ,typeid(type).hash_code(), index ,index);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        template<typename Tobj>
-        param in(const Tobj nm, unsigned T) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices; res._indices = this->_indices;
-            string key;
-            if (nm->_active) {
-                for (unsigned t = 0; t < T; t++) {
-                    key = nm->_name;
-                    key += ",";
-                    key += to_string(t);
-                    Debug("key: " << key << endl);
-                    auto index = _indices->size();
-                    auto pp = param_::_indices->insert(make_pair<>(key, index));
-                    _val->resize(max(_val->size(), index+1));
-                    _dim[0] = max(_dim[0],_val->size());
-                    if(pp.second) { //new index inserted
-                        _rev_indices->resize(_val->size());
-                        _rev_indices->at(index) = key;
-                        res._ids->at(0).push_back(index);
-                    }
-                    else {
-                        res._ids->at(0).push_back(pp.first->second);
-                    }
-                }
-            }
-            res._dim[0]=res._ids->at(0).size();
-            res._name += ".in_time_" +  nm->_name + "_time_" + to_string(T); // _name and _unique_id should be really unique.
-            hash<string> str_hash;
-            res._unique_id = make_tuple<>(res._id, in_time_,str_hash(nm->_name), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        
-        template<typename Tobj>
-        param in_at(const vector<Tobj*>& nodes, unsigned t) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices; res._indices = this->_indices;
-            if(nodes.empty()){
-                DebugOff("In function in_at(const vector<Tobj*>& nodes, unsigned t), nodes is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                return res;
-            }
-            string key;
-            for(auto it = nodes.begin(); it!= nodes.end(); it++) {
-                if(!(*it)->_active) {
-                    continue;
-                }
-                key = (*it)->_name;
-                key += ",";
-                key += to_string(t);
-                auto index = _indices->size();
-                auto pp = param_::_indices->insert(make_pair<>(key, index));
-                _val->resize(max(_val->size(), index+1));
-                _dim[0] = max(_dim[0],_val->size());
-                if(pp.second) { //new index inserted
-                    _rev_indices->resize(_val->size());
-                    _rev_indices->at(index) = key;
-                    res._ids->at(0).push_back(index);
-                }
-                else {
-                    res._ids->at(0).push_back(pp.first->second);
-                }
-            }
-            res._dim[0]=res._ids->at(0).size();
-            res._name += ".in_" + string(typeid(Tobj).name()) + "_at_" + to_string(t);
-            res._unique_id = make_tuple<>(res._id, in_at_, typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        template<typename Tobj>
-        param in(const vector<Tobj*>& nodes, unsigned T) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices; res._indices = this->_indices;
-            if(nodes.empty()){
-                DebugOff("In function param.in(const vector<Tobj*>& nodes, unsigned T), nodes is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                return res;
-            }
-            string key;
-            for (unsigned t = 0; t < T; t++) {
-                for(auto it = nodes.begin(); it!= nodes.end(); it++) {
-                    if(!(*it)->_active) {
-                        continue;
-                    }
-                    key = (*it)->_name;
-                    //if (t > 0) {
-                    key += ",";
-                    key += to_string(t);
-                    //}
-                    Debug("_val: " << _val->size() << endl);
-                    Debug("_indices: " << param_::_indices->size() << endl);
-                    auto index = _indices->size();
-                    auto pp = param_::_indices->insert(make_pair<>(key, index));
-                    _val->resize(max(_val->size(), index+1));
-                    _dim[0] = max(_dim[0],_val->size());
-                    if(pp.second) { //new index inserted
-                        _rev_indices->resize(_val->size());
-                        _rev_indices->at(index) = key;
-                        res._ids->at(0).push_back(index);
-                    }
-                    else {
-                        res._ids->at(0).push_back(pp.first->second);
-                    }
-                }
-            }
-            res._dim[0]=res._ids->at(0).size();
-            res._name += ".in_" + string(typeid(Tobj).name()) + "_time_" + to_string(T);
-            res._unique_id = make_tuple<>(res._id,in_time_,typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        template<typename Tobj>
-        param from(const vector<Tobj*>& arcs, unsigned T) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            if(arcs.empty()){
-                DebugOff("In function param.from(const vector<Tobj*>& arcs, unsigned T), arcs is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                return res;
-            }
-            string key;
-            for (unsigned t = 0; t < T; t++) {
-                for(auto it = arcs.begin(); it!= arcs.end(); it++) {
-                    if(!(*it)->_active) { // || !(*it)->_src->_active || !(*it)->_dest->_active ) {
-                        continue;
-                    }
-                    key = (*it)->_src->_name;
-                    key += ",";
-                    key += to_string(t);
-                    auto index = _indices->size();
-                    auto pp = param_::_indices->insert(make_pair<>(key,index));
-                    _val->resize(max(_val->size(), index+1));
-                    _dim[0] = max(_dim[0],_val->size());
-                    if(pp.second) { //new index inserted
-                        _rev_indices->resize(_val->size());
-                        _rev_indices->at(index) = key;
-                        res._ids->at(0).push_back(index);
-                    }
-                    else {
-                        res._ids->at(0).push_back(pp.first->second);
-                    }
-                }
-            }
-            res._dim[0]=res._ids->at(0).size();
-            res._name += ".from_" + string(typeid(Tobj).name()) + "_time_" + to_string(T);
-            res._unique_id = make_tuple<>(res._id,from_time_,typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        template<typename Tobj>
-        param to(const vector<Tobj*>& arcs, unsigned T) {
-            param res(this->_name);
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._val = this->_val;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            res._is_transposed = _is_transposed;
-            res._rev_indices = this->_rev_indices; res._indices = this->_indices;
-            if(arcs.empty()){
-                DebugOff("In function param.to(const vector<Tobj*>& arcs, unsigned T), arcs is empty!\n. Creating and empty variable! Check your sum/product operators.\n");
-                res._name += "EMPTY_VAR";
-                return res;
-            }
-            string key;
-            for (unsigned t = 0; t < T; t++) {
-                for(auto it = arcs.begin(); it!= arcs.end(); it++) {
-                    if(!(*it)->_active) {
-                        continue;
-                    }
-                    key = (*it)->_dest->_name;
-                    key += ",";
-                    key += to_string(t);
-                    auto index = _indices->size();
-                    auto pp = param_::_indices->insert(make_pair<>(key,index));
-                    _val->resize(max(_val->size(),index+1));
-                    _dim[0] = max(_dim[0],_val->size());
-                    if(pp.second) { //new index inserted
-                        _rev_indices->resize(_val->size());
-                        _rev_indices->at(index) = key;
-                        res._ids->at(0).push_back(index);
-                    }
-                    else {
-                        // already exists
-                        res._ids->at(0).push_back(pp.first->second);
-                    }
-                }
-            }
-            res._dim[0]=res._ids->at(0).size();
-            res._name += ".to_"  + string(typeid(Tobj).name()) + "_time_"+ to_string(T);
-            res._unique_id = make_tuple<>(res._id, to_time_, typeid(Tobj).hash_code(), 0,res._dim[0]);
-            res._is_indexed = true;
-            return res;
-        }
-        
-        // T copies of a parameter
-        void time_expand(const indices& T) {
-            _time_extended = true;
-            auto dim = param_::get_dim()*(T.size() - T._excluded_indices.size());
-            /* update the indices of the old parameter*/
-            string key;
-            auto indices = *_rev_indices;
-            auto val_temp = *param::_val;
-            set_size(dim);
-            //        for (map<std::string, unsigned>::iterator it= param::_indices->begin(); it != param::_indices->end(); it++){
-            //            key = it->first;
-            //            map_temp.insert(make_pair(key, it->second));
-            //        }
-            //CLEAR OLD ENTRIES
-            _indices->clear();
-            _rev_indices->clear();
-            _rev_indices->resize(dim);
-            _ids->at(0).clear();
-            //STORE NEW ENTRIES
-            unsigned index = 0;
-            for (auto i = 0; i<indices.size();i++) {
-                for(unsigned t = 0; t < T.size(); t++ ) {
-                    if(T._excluded_indices.count(t)!=0){
-                        continue;
-                    }
-                    key = indices[i];
-                    key += ",";
-                    key += T._indices->at(t);
-                    _val->at(index) = val_temp.at(i);
-                    param_::_indices->insert(make_pair<>(key, index));
-                    _rev_indices->at(index++) = key;
-                }
-            }
-            _name += ".time_expanded";
-            _unique_id = make_tuple<>(_id,unindexed_,typeid(type).hash_code(),0,dim*T.size());
-        }
-        
-        param time_collapse(const indices& T) {
-            param res(this->_name);
-            res._time_extended = false;
-            res._id = this->_id;
-            res._vec_id = this->_vec_id;
-            res._intype = this->_intype;
-            res._range = this->_range;
-            res._is_vector = this->_is_vector;
-            res._is_matrix = this->_is_matrix;
-            auto dim = param_::get_dim()/(T.size() - T._excluded_indices.size());
-            auto nt = param_::get_dim()/dim;
-            /* update the indices of the old parameter*/
-            string key;
-            auto indices = *_rev_indices;
-            auto val_temp = *param::_val;
-            res.set_size(dim);
-            //        for (map<std::string, unsigned>::iterator it= param::_indices->begin(); it != param::_indices->end(); it++){
-            //            key = it->first;
-            //            map_temp.insert(make_pair(key, it->second));
-            //        }
-            //CLEAR OLD ENTRIES
-            res._indices->clear();
-            res._rev_indices->clear();
-            res._rev_indices->resize(dim);
-            res._ids->at(0).clear();
-            res._val->resize(dim);
-            auto tsize = T._indices->at(0).size();
-            //STORE NEW ENTRIES
-            unsigned index = 0;
-            for (auto i = 0; i<dim*nt; i+=nt) {
-                    key = indices[i];
-                    key = key.substr(0,tsize-1);
-                    res._val->at(index) = val_temp.at(i);
-                    res.param_::_indices->insert(make_pair<>(key, index));
-                    res._rev_indices->at(index++) = key;
-            }
-            res._name = _name.substr(0,_name.size()-string(".time_expanded").size());
-            res._unique_id = make_tuple<>(get_id(),unindexed_,typeid(type).hash_code(),0,dim);
-            return res;
-        }
-        
-        void time_expand(unsigned T) {
-            assert(T >= 1);
-            auto dim = param_::get_dim();
-            set_size(dim*T);
-            /* update the indices of the old parameter*/
-            string key;
-            auto map_temp = *param::_indices;
-            auto val_temp = *param::_val;
-            //        for (map<std::string, unsigned>::iterator it= param::_indices->begin(); it != param::_indices->end(); it++){
-            //            key = it->first;
-            //            map_temp.insert(make_pair(key, it->second));
-            //        }
-            //CLEAR OLD ENTRIES
-            _indices->clear();
-            _ids->at(0).clear();
-            //STORE NEW ENTRIES
-            for(unsigned t = 0; t < T; t ++ ) {
-                for (auto &entry: map_temp) {
-                    key = entry.first;
-                    key += ",";
-                    key += to_string(t);
-                    //_val->at(param_::_indices->size()) = _val->at(entry.second);
-                    _val->at(param_::_indices->size()) = val_temp.at(entry.second);
-                    param_::_indices->insert(make_pair<>(key, param_::_indices->size()));
-                }
-            }
-            _name += ".time_expanded";
-            _unique_id = make_tuple<>(_id,in_time_,typeid(type).hash_code(),0,dim*T);
-        }
-        
-        
-        
+
+
         /** Output */
-        
-        string to_str(size_t index1, size_t index2) const {
-            if (_is_indexed) {
-                return to_string(_val->at(_ids->at(index1).at(index2)));
+
+        string to_str(size_t index1, size_t index2, int prec) {
+            if (is_matrix()){
+                return to_string_with_precision(eval(index1,index2),prec);
+            }
+            if (is_indexed()) {
+                return to_string_with_precision(eval(index1,index2),prec);
             }
             else {
-                return to_string(_val->at(index2));
+                return to_string_with_precision(eval(index2),prec);
             }
         }
+
+        string to_str(){
+            return get_name(true,false);
+        }
         
-        string to_str(size_t index) const {
-            if (_is_indexed) {
-                return to_string_with_precision(_val->at(_ids->at(0).at(index)), 10);
+        string to_str(size_t index, int prec) {
+            if (is_indexed()) {
+                return to_string_with_precision(eval(index), prec);
             }
             else {
-                return to_string_with_precision(_val->at(index), 10);
+                return to_string_with_precision(eval(index), prec);
             }
         }
         
-        void print(size_t index) const {
-            cout << to_str(index);
+        
+//        inline size_t get_id_inst(unsigned inst = 0) const {
+//            if (is_indexed()) {
+////                if(_indices->_ids->at(0).size() <= inst){
+////                    throw invalid_argument("get_id_inst out of range");
+////                }
+//                return _indices->_ids->at(0).at(inst);
+//            }
+//            return inst;
+//        };
+//
+//        size_t get_id_inst(unsigned inst1, unsigned inst2) const {
+//            if (is_indexed()) {
+//                if (_indices->_ids->size()==1) {
+////                    if(_indices->_ids->at(0).size() <= inst2){
+////                        throw invalid_argument("get_id_inst out of range");
+////                    }
+//                    return _indices->_ids->at(0).at(inst2);
+//                }
+//                return _indices->_ids->at(inst1).at(inst2);
+//            }
+//            return inst2;
+//        };
+        size_t get_max_cell_size(){
+            auto max_size = 0;
+            for (size_t i = 0; i<_dim[0]; i++) {
+                for (size_t j = 0; j<_dim[1]; j++) {
+                    eval(i,j);
+                    auto cell = to_str(i,j,5);
+                    if(max_size < cell.size()){
+                        max_size = cell.size();
+                    }
+                }
+            }
+            return max_size;
         }
         
-        string to_str(bool vals=false) const {
-            string str = get_name();
-            auto name = str.substr(0, str.find("."));
+        string to_str_vals(bool vals, int prec = 10) {
+            string str = get_name(false,true);
+            auto name = str.substr(0, str.find_last_of("."));
             str = name;
             if (vals) {
-                str += " = [ \n";
-                if(_rev_indices->size()>0) {
-                    for (unsigned idx = 0; idx < _val->size(); idx++) {
-//                        if (!_is_relaxed || fabs(roundf(_val->at(idx)) - _val->at(idx)) > 1e-4) {
-                            str += name+"(" + _rev_indices->at(idx) + ")=" + to_string_with_precision(_val->at(idx));
-                            str += " \n";
-//                        }
+                str += " = { \n";
+                auto space_size = str.size();
+                if (is_matrix()) {
+                    auto max_cell_size = get_max_cell_size();
+                    for (size_t i = 0; i<_dim[0]; i++) {
+                        str.insert(str.end(), space_size, ' ');
+                        str += "|";
+                        for (size_t j = 0; j<_dim[1]; j++) {
+                            auto cell = to_str(i,j,prec);
+                            auto cell_size = cell.size();
+                            cell.insert(0, floor((max_cell_size+1 - cell_size)/2.), ' ');
+                            cell.append(ceil((max_cell_size+1 - cell_size)/2.), ' ');
+                            str += cell;
+                            if(j!=_dim[1]-1){
+                                str += " ";
+                            }
+                        }
+                        str += "|\n";
                     }
-                }else {
-                    for(auto &indsp: *_indices) {
-                        str += name+"("+indsp.first + "=" + to_string_with_precision(_val->at(indsp.second)) + ")";
-                        str += " ";
+                    str += "}\n";
+                    return str;
+                }
+                if(_indices) {
+                    if (is_indexed()) {
+                        for (size_t i = 0; i < _dim[0]; i++) {
+                            str += "[" + _indices->_keys->at(get_id_inst(i)) + "] = " + to_string_with_precision(eval(i), prec);
+                            str += " \n";
+                        }
+                    }
+                    else {
+                        for (size_t i = 0; i < _dim[0]; i++) {
+                            str += "[" + _indices->_keys->at(i) + "] = " + to_string_with_precision(eval(i), prec);
+                            str += " \n";
+                        }
                     }
                 }
-                str += "];\n";
+                else {
+                    for (size_t idx = 0; idx < _val->size(); idx++) {
+                        str += "["+to_string(idx) + "] = " + to_string_with_precision(eval(idx),prec);
+                        str += " \n";
+                    }
+                }
+                str += "};\n";
             }
             return str;
         }
         
-        void print(bool vals=false) const {
-            cout << this->to_str(vals);
+        
+        void print() {
+            print(16);
+        }
+
+        void print_vals(int prec){
+            cout << this->to_str_vals(true, prec);
         }
         
-        
+        void print(int prec) {
+            print_vals(prec);
+        }
+
+
         type getvalue() const {
-            if (_is_indexed) {
-                return (_val->at(_indices->begin()->second));
-            }
-            else {
-                return _val->at(0);
+            return _val->back();
+        }
+        
+        void update_range(const Cpx& val);
+        /**
+         Recompute range based on stored values.
+         */
+        void reset_range(){
+            init_range();
+            for (auto v:*_val) {
+                if(_range->first > v){
+                    _range->first = v;
+                }
+                if(_range->second  < v){
+                    _range->second = v;
+                }
             }
         }
+//        void set_vals(const Eigen::SparseMatrix<Cpx,Eigen::RowMajor>& SM);
+        
+        void set_double_val(double* x){set_double_val_(x);};
+            
+        template<class T=type, typename enable_if<is_arithmetic<T>::value>::type* = nullptr>
+        void set_double_val_(double* x){
+            auto vid = get_id();
+            for (size_t i = 0; i < get_dim(); i++) {
+                x[vid+i] = (double)_val->at(i);
+            }
+        }
+        
+        template<class T=type, typename enable_if<is_same<T, Cpx>::value>::type* = nullptr>
+        void set_double_val_(double* x){
+            throw invalid_argument("Cannot call set_double_val_ with a non-arithmetic type.");
+        }
+        
+        void get_double_val(const double* x){get_double_val_(x);};
+        
+        template<class T=type, typename enable_if<is_arithmetic<T>::value>::type* = nullptr>
+        void get_double_val_(const double* x){
+            auto vid = get_id();
+            for (size_t i = 0; i < get_dim(); i++) {
+                _val->at(i) = x[vid+i];
+            }
+        }
+        
+        template<class T=type, typename enable_if<is_same<T, Cpx>::value>::type* = nullptr>
+        void get_double_val_(const double* x){
+            throw invalid_argument("Cannot call get_double_val_ with a non-arithmetic type.");
+        }
+        
+        
+        void get_double_val(size_t pos, double x){get_double_val_(pos,x);};
+        
+        template<class T=type, typename enable_if<is_arithmetic<T>::value>::type* = nullptr>
+        void get_double_val_(size_t pos, double x){
+            _val->at(pos) = x;
+        }
+        
+        template<class T=type, typename enable_if<is_same<T, Cpx>::value>::type* = nullptr>
+        void get_double_val_(size_t i, double x){
+            throw invalid_argument("Cannot call get_double_val_ with a non-arithmetic type.");
+        }
+        
+        void set_double_val(size_t pos, double& x){set_double_val_(pos,x);};
+        
+        template<class T=type, typename enable_if<is_arithmetic<T>::value>::type* = nullptr>
+        void set_double_val_(size_t pos, double& x){
+            x = _val->at(pos);
+        }
+        
+        template<class T=type, typename enable_if<is_same<T, Cpx>::value>::type* = nullptr>
+        void set_double_val_(size_t i, double& x){
+            throw invalid_argument("Cannot call get_double_val_ with a non-arithmetic type.");
+        }
+        
+        /** round the value stored at position i to the nearest integer */
+        void round_vals(){round_vals_();};
+        
+        template<class T=type, typename enable_if<is_arithmetic<T>::value>::type* = nullptr>
+        void round_vals_(){
+            for (size_t i = 0; i < get_dim(); i++) {
+                _val->at(i) = std::round((T)_val->at(i));
+            }
+        };
+        
+        template<class T=type, typename enable_if<is_same<T, Cpx>::value>::type* = nullptr>
+        void round_vals_(){
+            for (size_t i = 0; i < get_dim(); i++) {
+                _val->at(i).real(std::round(_val->at(i).real()));
+                _val->at(i).imag(std::round(_val->at(i).imag()));
+            }
+        };
+        
+        
+        
+        template<typename T, typename=enable_if<is_convertible<T,type>::value>>
+        void copy_vals(const param<T>& p){
+            auto dim = p.get_dim();
+            _val->resize(dim);
+            for (size_t i = 0; i < dim; i++) {
+                _val->at(i) = p._val->at(i);
+            }
+        }
+        
+        void copy_vals(const shared_ptr<param_>& p);
+                
+       
+
+
     };
-    
+
+    param<Cpx> conj(const param<Cpx>& p);
+    param<Cpx> ang(const param<Cpx>& p);
+    param<Cpx> sqrmag(const param<Cpx>& p);
+    param<Cpx> real(const param<Cpx>& p);
+    param<Cpx> imag(const param<Cpx>& p);
+
     template<typename type>
-    param<type> all(const param<type>& p) {
-        auto pp = param<type>(p);
-        pp._is_vector = true;
-        return pp;
+    param<type> diag(const param<type>& p){
+        param<type> res("diag("+p._name+")");
+        if(p.is_matrix()){
+            res.set_size(min(p._dim[0], p._dim[1]));
+            for (auto i = 0; i<res._dim[0]; i++) {
+                res.set_val(i,p.eval(i,i));
+            }
+        }
+        else{
+            res.set_size(p._dim[0], p._dim[0]);
+            for (auto i = 0; i<res._dim[0]; i++) {
+                res.set_val(i,i,p.eval(i));
+            }
+        }
+        return res;
     }
+
 }
 #endif /* defined(____param__) */

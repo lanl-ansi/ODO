@@ -12,7 +12,7 @@
 using namespace std;
 
 namespace gravity {
-    
+
     /** Backbone class for auxiliary objects that can be attached to nodes, e.g., generators. */
     class aux{
     public:
