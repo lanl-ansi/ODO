@@ -120,8 +120,7 @@ public:
     param<> v_min, v_max, v_s; /**< Voltage bounds and nominal values (default set points) */
     param<> v_diff_max; /**< Voltage bounds difference upper bound */
     param<> w_min, w_max; /**< Voltage bounds in lifted W space */
-    param<> pl, ql, pl_ratio; /**< Load vectors */
-    param<> gs, bs; /**< Transformer params */
+    param<> pl = param<>("pl"), ql = param<>("ql"), pl_ratio; /**< Load vectors */
     param<> eff_a, eff_b; /**< Efficiency params */
     unsigned _nb_eff_pieces = 1;/**< Number of pieces for the efficiency curves */
     indices _eff_pieces;/**< Set of indices for pieces for the efficiency curves */

@@ -925,10 +925,7 @@ namespace gravity {
             }
             else {
                 Warning("WARNING: calling add_val(const string& key, T val) with an existing key, overriding existing value" << endl);
-                _val->at(pp.first->second) = val;
-                if(val==_range->first || val==_range->second){
-                    reset_range();
-                }
+                set_val(key,val);
                 return pp.first->second;
             }
         }

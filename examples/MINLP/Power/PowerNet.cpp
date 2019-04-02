@@ -92,8 +92,6 @@ PowerNet::PowerNet() {
     pl.set_name("pl");
     pl_ratio.set_name("pl_ratio");
     ql.set_name("ql");
-    gs.set_name("gs");
-    bs.set_name("bs");
     g.set_name("g");
     b.set_name("b");
     r.set_name("r");
@@ -1476,6 +1474,9 @@ void PowerNet::readJSON(const string& fname){
         auto bus = new Bus(to_string(index));
         bus->vbound.min = vmin[0].GetDouble();
         bus->vbound.max = vmax[0].GetDouble();
+//        vm_s_.add_val("ph1,"+bus->_name, 0.9999742573517363);
+//        vm_s_.add_val("ph2,"+bus->_name, 1.0000038391442767);
+//        vm_s_.add_val("ph3,"+bus->_name, 0.9999622416976457);
         vm_s_.add_val("ph1,"+bus->_name, vm[0].GetDouble());
         vm_s_.add_val("ph2,"+bus->_name, vm[1].GetDouble());
         vm_s_.add_val("ph3,"+bus->_name, vm[2].GetDouble());
@@ -1523,9 +1524,12 @@ void PowerNet::readJSON(const string& fname){
         bus->_type = btype;
         if (btype==3) {
             ref_bus = bus->_name;
-            theta_s_.add_val("ph1,"+bus->_name, std::tan(0));
-            theta_s_.add_val("ph2,"+bus->_name, std::tan(2*pi/3));
-            theta_s_.add_val("ph3,"+bus->_name, std::tan(4*pi/3));
+//            theta_s_.add_val("ph1,"+bus->_name, std::tan(0));
+//            theta_s_.add_val("ph2,"+bus->_name, std::tan(-2*pi/3));
+//            theta_s_.add_val("ph3,"+bus->_name, std::tan(2*pi/3));
+            theta_s_.add_val("ph1,"+bus->_name, 0);
+            theta_s_.add_val("ph2,"+bus->_name, (-2*pi/3));
+            theta_s_.add_val("ph3,"+bus->_name, (2*pi/3));
 
         }
         assert(bus->_id<nb_nodes);
@@ -2099,7 +2103,12 @@ unique_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
 
     /** Voltage angle at source bus **/
     Constraint<> fix_voltage_ang("fix_voltage_ang");
-    fix_voltage_ang += vi.in(ref_id) - theta_s_.in(ref_id)*vr.in(ref_id);
+    if(pmt==ACPOL){
+        fix_voltage_ang += theta.in(ref_id) - theta_s_.in(ref_id);
+    }
+    else {
+        fix_voltage_ang += vi.in(ref_id) - theta_s_.in(ref_id)*vr.in(ref_id);
+    }
 //    ODO->add(fix_voltage_ang.in(ref_id)==0);
 
     /** FLOW CONSERVATION **/
@@ -2110,12 +2119,12 @@ unique_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     KCL_P  = sum(Pij, out_arcs) + sum(Pji, in_arcs) + pl.in(Nt) - sum(Pg, gen_nodes);
     KCL_Q  = sum(Qij, out_arcs) + sum(Qji, in_arcs) + ql.in(Nt) - sum(Qg, gen_nodes);
     if(pmt==ACPOL){
-        KCL_P += gs.in(Nt)*pow(v.in(Nt),2);
-        KCL_Q -= bs.in(Nt)*pow(v.in(Nt),2);
+        KCL_P += gs_.in(Nt)*pow(v.in(Nt),2);
+        KCL_Q -= bs_.in(Nt)*pow(v.in(Nt),2);
     }
     else if(pmt==ACRECT){
-        KCL_P += gs.in(Nt)*(pow(vr.in(Nt),2)+pow(vi.in(Nt),2));
-        KCL_Q -= bs.in(Nt)*(pow(vr.in(Nt),2)+pow(vi.in(Nt),2));
+        KCL_P += gs_.in(Nt)*(pow(vr.in(Nt),2)+pow(vi.in(Nt),2));
+        KCL_Q -= bs_.in(Nt)*(pow(vr.in(Nt),2)+pow(vi.in(Nt),2));
     }
     ODO->add(KCL_P.in(Nt) == 0);
     ODO->add(KCL_Q.in(Nt) == 0);
@@ -2446,9 +2455,9 @@ int PowerNet::readgrid(const string& fname, bool reverse_arcs) {
         file >> word;
         ql.add_val(name,atof(word.c_str())/bMVA);
         file >> word;
-        gs.add_val(name,atof(word.c_str())/bMVA);
+        gs_.add_val(name,atof(word.c_str())/bMVA);
         file >> word;
-        bs.add_val(name,atof(word.c_str())/bMVA);
+        bs_.add_val(name,atof(word.c_str())/bMVA);
         file >> ws >> word >> ws >> word;
         v_s.add_val(name,atof(word.c_str()));
         file >> ws >> word >> ws >> word;
@@ -2461,7 +2470,7 @@ int PowerNet::readgrid(const string& fname, bool reverse_arcs) {
         w_max.add_val(name,pow(v_max.eval(), 2));
         // single phase
 
-        bus = new Bus(name, pl.eval(), ql.eval(), gs.eval(), bs.eval(), v_min.eval(), v_max.eval(), kvb, 1);
+        bus = new Bus(name, pl.eval(), ql.eval(), gs_.eval(), bs_.eval(), v_min.eval(), v_max.eval(), kvb, 1);
 //        bus_clone = new Bus(name, pl.eval(), ql.eval(), gs.eval(), bs.eval(), v_min.eval(), v_max.eval(), kvb, 1);
         total_p_load += pl.eval();
         total_q_load += ql.eval();
@@ -2993,11 +3002,11 @@ shared_ptr<Model<>> PowerNet::build_SCOPF(PowerModelType pmt, int output, double
 
     /* Flow conservation */
     Constraint<> KCL_P("KCL_P");
-    KCL_P  = sum(Pf_from, out_arcs) + sum(Pf_to, in_arcs) + pl - sum(Pg, gens) + gs*Wii;
+    KCL_P  = sum(Pf_from, out_arcs) + sum(Pf_to, in_arcs) + pl - sum(Pg, gens) + gs_*Wii;
     SOCPF->add(KCL_P.in(nodes) == 0);
 
     Constraint<> KCL_Q("KCL_Q");
-    KCL_Q  = sum(Qf_from, out_arcs) + sum(Qf_to, in_arcs) + ql - sum(Qg, gens) - bs*Wii;
+    KCL_Q  = sum(Qf_from, out_arcs) + sum(Qf_to, in_arcs) + ql - sum(Qg, gens) - bs_*Wii;
     SOCPF->add(KCL_Q.in(nodes) == 0);
 
     /* AC Power Flow */
@@ -3079,8 +3088,8 @@ shared_ptr<Model<>> build_ACOPF(PowerNet& grid, PowerModelType pmt, int output, 
     auto c0 = grid.c0.in(gens);
     auto pl = grid.pl.in(nodes);
     auto ql = grid.ql.in(nodes);
-    auto gs = grid.gs.in(nodes);
-    auto bs = grid.bs.in(nodes);
+    auto gs = grid.gs_.in(nodes);
+    auto bs = grid.bs_.in(nodes);
     auto b = grid.b.in(arcs);
     auto g = grid.g.in(arcs);
     auto as = grid.as.in(arcs);
