@@ -1220,8 +1220,9 @@ namespace gravity {
                     break;
                 }
             }
-            if(v.is_double_indexed()){
+            if(v.is_indexed()){
                 res._indices = v._indices;
+                res._dim[0] = v._dim[0];
             }
             return res;
         }
@@ -1741,8 +1742,8 @@ namespace gravity {
         size_t get_dim(size_t i) const{
             if(is_double_indexed())
                 return _indices->_ids->at(i).size();
-            if (is_indexed() && _indices->_ids->size()>i) {
-                return _indices->_ids->size();
+            if (is_indexed()) {
+                return _indices->_ids->at(0).size();
             }
             return constant_::get_dim(i);
         }
@@ -6246,7 +6247,7 @@ namespace gravity {
         }
         else if(p2.is_param() && p1.is_var()){
             res.insert(true,unit<T2>(),p1);
-            auto newp(p2);
+            func<T2> newp(p2);
             newp.reverse_sign();
             res.add_cst(newp);
         }
@@ -7330,7 +7331,7 @@ namespace gravity {
     template<class T1,class T2, typename enable_if<is_convertible<T2, T1>::value && sizeof(T2) < sizeof(T1)>::type* = nullptr>
     func<T1> operator-(const param<T1>& v, const constant<T2>& p){
         func<T1> res(v);
-        auto newp = constant<T1>(p);
+        func<T1> newp = constant<T1>(p);
         newp.reverse_sign();
         res.add_cst(newp);
         res._range = get_minus_range(v._range,p.range());
@@ -7341,7 +7342,7 @@ namespace gravity {
     template<class T1,class T2, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
     func<T2> operator-(const param<T1>& v, const constant<T2>& p){
         func<T2> res(v);
-        auto newp(p);
+        func<T2> newp(p);
         newp.reverse_sign();
         res.add_cst(newp);
         res._range = get_minus_range(v._range,p.range());
@@ -7774,7 +7775,6 @@ namespace gravity {
         }
         return unit<type>().tr()*(p.vec()).in(ids);
     }
-    
     template<class T1,class T2, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
     func<T2> product(const func<T1>& f1, const func<T2>& f2){
         if(f1.is_column_vector() && f2.is_column_vector()){/* This is a dot product */
@@ -7805,6 +7805,66 @@ namespace gravity {
         return f1*f2;
     }
     
+    template<class T1,class T2, typename enable_if<is_convertible<T2, T1>::value && sizeof(T2) < sizeof(T1)>::type* = nullptr>
+    func<T1> product(const var<T1>& f1, const var<T2>& f2){
+        if(f1.is_column_vector() && f2.is_column_vector()){/* This is a dot product */
+            return f1.tr()*f2.vec();
+        }
+        if(f1.is_matrix() && f2.is_column_vector())
+            return f1*f2.vec();
+        return f1*f2;
+    }
+    
+    template<class T1,class T2, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
+    func<T2> product(const var<T1>& f1, const var<T2>& f2){
+        if(f1.is_column_vector() && f2.is_column_vector()){/* This is a dot product */
+            return f1.tr()*f2.vec();
+        }
+        if(f1.is_matrix() && f2.is_column_vector())
+            return f1*f2.vec();
+        return f1*f2;
+    }
+    
+    template<class T1,class T2, typename enable_if<is_convertible<T2, T1>::value && sizeof(T2) < sizeof(T1)>::type* = nullptr>
+    func<T1> product(const var<T1>& f1, const param<T2>& f2){
+        if(f1.is_column_vector() && f2.is_column_vector()){/* This is a dot product */
+            return f1.tr()*f2.vec();
+        }
+        if(f1.is_matrix() && f2.is_column_vector())
+            return f1*f2.vec();
+        return f1*f2;
+    }
+    
+    template<class T1,class T2, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
+    func<T2> product(const var<T1>& f1, const param<T2>& f2){
+        if(f1.is_column_vector() && f2.is_column_vector()){/* This is a dot product */
+            return f1.tr()*f2.vec();
+        }
+        if(f1.is_matrix() && f2.is_column_vector())
+            return f1*f2.vec();
+        return f1*f2;
+    }
+    
+    template<class T1,class T2, typename enable_if<is_convertible<T2, T1>::value && sizeof(T2) < sizeof(T1)>::type* = nullptr>
+    func<T1> product(const param<T1>& f1, const var<T2>& f2){
+        if(f1.is_column_vector() && f2.is_column_vector()){/* This is a dot product */
+            return f1.tr()*f2.vec();
+        }
+        if(f1.is_matrix() && f2.is_column_vector())
+            return f1*f2.vec();
+        return f1*f2;
+    }
+    
+    template<class T1,class T2, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
+    func<T2> product(const param<T1>& f1, const var<T2>& f2){
+        if(f1.is_column_vector() && f2.is_column_vector()){/* This is a dot product */
+            return f1.tr()*f2.vec();
+        }
+        if(f1.is_matrix() && f2.is_column_vector())
+            return f1*f2.vec();
+        return f1*f2;
+    }
+    
     template<class T1,class T2, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
     func<T2> product(const param<T1>& f1, const param<T2>& f2){
         if(f1.is_column_vector() && f2.is_column_vector()){/* This is a dot product */
@@ -7814,6 +7874,8 @@ namespace gravity {
             return f1*f2.vec();
         return f1*f2;
     }
+    
+    
     
     template<class T1,class T2, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
     func<T2> product(const param<T1>& f1, const func<T2>& f2){
@@ -7855,6 +7917,46 @@ namespace gravity {
         return f1*f2;
     }
     
+    template<class T1,class T2, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
+    func<T2> product(const var<T1>& f1, const func<T2>& f2){
+        if(f1.is_column_vector() && f2.is_column_vector()){/* This is a dot product */
+            return f1.tr()*f2.vec();
+        }
+        if(f1.is_matrix() && f2.is_column_vector())
+            return f1*f2.vec();
+        return f1*f2;
+    }
+    
+    template<class T1,class T2, typename enable_if<is_convertible<T2, T1>::value && sizeof(T2) < sizeof(T1)>::type* = nullptr>
+    func<T1> product(const var<T1>& f1, const func<T2>& f2){
+        if(f1.is_column_vector() && f2.is_column_vector()){/* This is a dot product */
+            return f1.tr()*f2.vec();
+        }
+        if(f1.is_matrix() && f2.is_column_vector())
+            return f1*f2.vec();
+        return f1*f2;
+    }
+    
+    template<class T1,class T2, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
+    func<T2> product(const func<T1>& f1, const var<T2>& f2){
+        if(f1.is_column_vector() && f2.is_column_vector()){/* This is a dot product */
+            return f1.tr()*f2.vec();
+        }
+        if(f1.is_matrix() && f2.is_column_vector())
+            return f1*f2.vec();
+        return f1*f2;
+    }
+    
+    template<class T1,class T2, typename enable_if<is_convertible<T2, T1>::value && sizeof(T2) < sizeof(T1)>::type* = nullptr>
+    func<T1> product(const func<T1>& f1, const var<T2>& f2){
+        if(f1.is_column_vector() && f2.is_column_vector()){/* This is a dot product */
+            return f1.tr()*f2.vec();
+        }
+        if(f1.is_matrix() && f2.is_column_vector())
+            return f1*f2.vec();
+        return f1*f2;
+    }
+    
     template<class T1,class T2, typename enable_if<is_convertible<T2, T1>::value && sizeof(T2) < sizeof(T1)>::type* = nullptr>
     func<T1> product(const param<T1>& f1, const constant<T2>& f2){
         constant<T1> new_f2(f2);
@@ -7888,6 +7990,49 @@ namespace gravity {
     
     template<class T1,class T2, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
     func<T2> product(const constant<T1>& f1, const param<T2>& f2){
+        constant<T2> new_f1(f1);
+        if(f2.is_column_vector()){/* Dot product with a constant */
+            new_f1.transpose();
+            new_f1._dim[1] = f2._dim[0];
+            return new_f1*f2.vec();
+        }
+        return new_f1*f2;
+    }
+    
+    
+    template<class T1,class T2, typename enable_if<is_convertible<T2, T1>::value && sizeof(T2) < sizeof(T1)>::type* = nullptr>
+    func<T1> product(const var<T1>& f1, const constant<T2>& f2){
+        constant<T1> new_f2(f2);
+        if(f1.is_column_vector()){/* This is a dot product */
+            new_f2._dim[0] = f1._dim[1];
+            return f1.tr()*new_f2.vec();
+        }
+        return f1*new_f2;
+    }
+    
+    template<class T1,class T2, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
+    func<T2> product(const var<T1>& f1, const constant<T2>& f2){
+        constant<T2> new_f2(f2);
+        if(f1.is_column_vector()){/* This is a dot product */
+            new_f2._dim[0] = f1._dim[1];
+            return f1.tr()*new_f2.vec();
+        }
+        return f1*new_f2;
+    }
+    
+    template<class T1,class T2, typename enable_if<is_convertible<T2, T1>::value && sizeof(T2) < sizeof(T1)>::type* = nullptr>
+    func<T1> product(const constant<T1>& f1, const var<T2>& f2){
+        constant<T1> new_f1(f1);
+        if(f2.is_column_vector()){/* Dot product with a constant */
+            new_f1.transpose();
+            new_f1._dim[1] = f2._dim[0];
+            return new_f1*f2.vec();
+        }
+        return new_f1*f2;
+    }
+    
+    template<class T1,class T2, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
+    func<T2> product(const constant<T1>& f1, const var<T2>& f2){
         constant<T2> new_f1(f1);
         if(f2.is_column_vector()){/* Dot product with a constant */
             new_f1.transpose();
@@ -7962,6 +8107,26 @@ namespace gravity {
         return product(f1, constant<T2>(f2));
     }
     
+    template<class T1,class T2, typename enable_if<is_convertible<T2, T1>::value && sizeof(T2) < sizeof(T1)>::type* = nullptr>
+    func<T1> product(T1 f1, const var<T2>& f2){
+        return product(constant<T1>(f1), f2);
+    }
+    
+    template<class T1=double,class T2=double, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
+    func<T2> product(T1 f1, const var<T2>& f2){
+        return product(constant<T2>(f1), f2);
+    }
+    
+    
+    template<class T1,class T2, typename enable_if<is_convertible<T2, T1>::value && sizeof(T2) < sizeof(T1)>::type* = nullptr>
+    func<T1> product(const var<T1>& f1, T2 f2){
+        return product(f1, constant<T1>(f2));
+    }
+    
+    template<class T1,class T2, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
+    func<T2> product(const var<T1>& f1, T2 f2){
+        return product(f1, constant<T2>(f2));
+    }
     
     template<class T1,class T2, typename enable_if<is_convertible<T2, T1>::value && sizeof(T2) < sizeof(T1)>::type* = nullptr>
     func<T1> product(T1 f1, const func<T2>& f2){

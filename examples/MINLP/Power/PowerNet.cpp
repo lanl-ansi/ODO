@@ -228,8 +228,7 @@ indices PowerNet::to_branch_phase(unsigned ph) const{
     string key, time_stamp;
     size_t inst = 0;
     for (auto key: *Ei._keys) {
-        auto key_dest = key.substr(0, key.find_last_of(","));
-        key_dest = key_dest.substr(key_dest.find_last_of(",")+1,key_dest.size());
+        auto key_dest = key.substr(key.find_last_of(",")+1,key.size());
         auto key_arc = key.substr(0, key.find_last_of(","));
         key_arc = key_arc.substr(0, key_arc.find_last_of(","));
         key_arc = key.substr(key_arc.find_last_of(",")+1,key.size());
@@ -283,8 +282,7 @@ indices PowerNet::fixed_to_branch_phase(unsigned ph) const{
     string key, time_stamp;
     size_t inst = 0;
     for (auto key: *Ei._keys) {
-        auto key_dest = key.substr(0, key.find_last_of(","));
-        key_dest = key_dest.substr(key_dest.find_last_of(",")+1,key_dest.size());
+        auto key_dest = key.substr(key.find_last_of(",")+1,key.size());
         auto key_arc = key.substr(0, key.find_last_of(","));
         key_arc = key_arc.substr(0, key_arc.find_last_of(","));
         key_arc = key.substr(key_arc.find_last_of(",")+1,key.size());
@@ -334,7 +332,8 @@ indices PowerNet::fixed_from_branch_phase(unsigned ph) const{
     string key, time_stamp;
     size_t inst = 0;
     for (auto key: *Ei._keys) {
-        auto key_src = key.substr(key.find_last_of(",")+1,key.size());
+        auto key_src = key.substr(0, key.find_last_of(","));
+        key_src = key_src.substr(key_src.find_last_of(",")+1,key_src.size());
         auto key_arc = key.substr(0, key.find_last_of(","));
         key_arc = key_arc.substr(0, key_arc.find_last_of(","));
         key_arc = key.substr(key_arc.find_last_of(",")+1,key.size());
@@ -384,7 +383,8 @@ indices PowerNet::from_branch_phase(unsigned ph) const{
     string key, time_stamp;
     size_t inst = 0;
     for (auto key: *Ei._keys) {
-        auto key_src = key.substr(key.find_last_of(",")+1,key.size());
+        auto key_src = key.substr(0, key.find_last_of(","));
+        key_src = key_src.substr(key_src.find_last_of(",")+1,key_src.size());
         auto key_arc = key.substr(0, key.find_last_of(","));
         key_arc = key_arc.substr(0, key_arc.find_last_of(","));
         key_arc = key.substr(key_arc.find_last_of(",")+1,key.size());
@@ -1462,8 +1462,6 @@ void PowerNet::readJSON(const string& fname){
     Value& buses = d["bus"];
     nb_nodes = buses.MemberCount();
     DebugOn("nb_nodes = " << nb_nodes << endl);
-    nodes.resize(nb_nodes);
-    double pi = 4.*atan(1.);
     for (auto& v : buses.GetObject()) {
         Value& list = v.value;
         auto btype = list["bus_type"].GetInt();
@@ -1490,9 +1488,6 @@ void PowerNet::readJSON(const string& fname){
 //        theta_s_.add_val("ph1,"+bus->_name, 30.*pi/180.);
 //        theta_s_.add_val("ph2,"+bus->_name, -90.*pi/180.);
 //        theta_s_.add_val("ph3,"+bus->_name, 150.*pi/180.);
-        theta_s_.add_val("ph1,"+bus->_name, std::tan(0));
-        theta_s_.add_val("ph2,"+bus->_name, std::tan(-2.094395));
-        theta_s_.add_val("ph3,"+bus->_name, std::tan(2.094395));
         for(auto i = 0;i<3;i++){
             auto ph_key = "ph"+to_string(i+1)+","+bus->_name;
             if(vm[i].GetDouble()!=0){
@@ -1524,16 +1519,20 @@ void PowerNet::readJSON(const string& fname){
 //        theta_.add_val(bus->_name+",ph1", va[1].GetDouble());
 //        theta_.add_val(bus->_name+",ph2", va[2].GetDouble());
         bus->_active = status;
-        bus->_id = index-1;
+        bus->_id = nodes.size();
         bus->_type = btype;
         if (btype==3) {
             ref_bus = bus->_name;
+            theta_s_.add_val("ph1,"+bus->_name, std::tan(0));
+            theta_s_.add_val("ph2,"+bus->_name, std::tan(2*pi/3));
+            theta_s_.add_val("ph3,"+bus->_name, std::tan(4*pi/3));
+
         }
         assert(bus->_id<nb_nodes);
         if (!nodeID.insert(pair<string,Node*>(bus->_name, bus)).second) {
             throw invalid_argument("ERROR: adding the same bus twice!");
         }
-        nodes[bus->_id] = bus;
+        nodes.push_back(bus);
         if (!bus->_active) {
             DebugOn("INACTIVE NODE: " << name << endl);
         }
@@ -1564,8 +1563,8 @@ void PowerNet::readJSON(const string& fname){
         
         auto arc = new Line(to_string(index) + "," + to_string(f_bus)+","+to_string(t_bus)); // Name of lines
         arc->_id = index-1;
-        arc->_src = nodes[f_bus-1];
-        arc->_dest= nodes[t_bus-1];
+        arc->_src = get_node(to_string(f_bus));
+        arc->_dest= get_node(to_string(t_bus));
         arc->status = status;
         arc->_len = length;
         arc->_is_transformer = (tr=="true");
@@ -1645,8 +1644,8 @@ void PowerNet::readJSON(const string& fname){
             for (auto j= 0; j<3; j++) {
                 auto key = "ph"+to_string(i+1)+",ph"+to_string(j+1)+","+arc->_name;
                 cross_phase.insert(key);
-                g.add_val(key, ymat_inv(i,j).real()/3.);
-                b.add_val(key, ymat_inv(i,j).imag()/3.);
+                g.add_val(key, ymat_inv(i,j).real());
+                b.add_val(key, ymat_inv(i,j).imag());
             }
         }
 //        g.print(true);
@@ -1670,7 +1669,7 @@ void PowerNet::readJSON(const string& fname){
         auto qgmin =  list["qmin"].GetArray();
         auto pgmax =  list["pmax"].GetArray();
         auto pgmin =  list["pmin"].GetArray();
-        auto bus = (Bus*)nodes[gbus-1];
+        auto bus = (Bus*)get_node(to_string(gbus));
         bus->_has_gen = true;
         name = "Existing_Gen," + bus->_name + "," + "slot"+to_string(index-1);
         Gen* gen = new Gen(bus, name, 0, 0, 0, 0);
@@ -1712,7 +1711,7 @@ void PowerNet::readJSON(const string& fname){
         auto status =  list["status"].GetInt();
         auto pd =  list["pd"].GetArray();
         auto qd =  list["qd"].GetArray();
-        auto bus = (Bus*)nodes[lbus-1];
+        auto bus = (Bus*)get_node(to_string(lbus));
         auto name = bus->_name;
         for(auto i=0; i<3; i++){
             auto ph_key = "ph"+to_string(i+1)+","+name;
@@ -1738,7 +1737,7 @@ void PowerNet::readJSON(const string& fname){
         auto status =  list["status"].GetInt();
         auto bs = list["bs"].GetArray();
         auto gs = list["gs"].GetArray();
-        auto bus = (Bus*)nodes[bus_id-1];
+        auto bus = (Bus*)get_node(to_string(bus_id));        
         for (auto i = 0; i<3; i++) {
             auto ph_key = "ph"+to_string(i+1)+","+bus->_name;
             bus->_cond[i]->_bs = bs[i].GetDouble();
@@ -1795,14 +1794,18 @@ unique_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     
     /** Indices Sets */
     hours = time(1,max_nb_hours); /**< Hours */
+    hours._name = "hours";
     //        indices months = time("jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"); /**< Months */
     //    indices months = time("jan","feb","mar","apr","may","jun"); /**< Months */
     //    months = time("apr", "aug", "dec"); /**< Months */
     indices months = time("jan");
+    months._name = "months";
     indices phases = indices("ph1","ph2","ph3");
+    phases._name = "phases";
     //        indices months = time("jan", "feb", "mar","apr","may","jun");
     //    typical_days = time("week","peak","weekend");
     typical_days = time("week");
+    typical_days._name = "typical_days";
     T = indices(months,typical_days,hours);
     double nT = T.size();
     DebugOn("number of time periods = " << nT << endl);
@@ -1981,9 +1984,12 @@ unique_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
         
         /** Power Flows */
         param<Cpx> Y0("Y0"), Y1("Y1"), Y2("Y2"), Y3("Y3");
+        param<Cpx> Yc_fr("Yc_fr"), Yc_to("Yc_to");/* Line charging */
         var<Cpx> Vfr("Vfr"), Vto("Vto");
         var<Cpx> Sij("Sij"), Sji("Sji"), Vi("Vi"), Vj("Vj"), Vi1("Vi1"), Vi2("Vi2"), Vi3("Vi3"), Vj1("Vj1"), Vj2("Vj2"), Vj3("Vj3");
         /* Phase 1 */
+        Yc_fr.real_imag(g_fr_.in(Et1),b_fr_.in(Et1));
+        Yc_to.real_imag(g_to_.in(Et1),b_to_.in(Et1));
         Y0.real_imag(g.in(branch_id_ph1),b.in(branch_id_ph1));
         Y1.real_imag(g.in(branch_ph1),b.in(branch_ph1));
         Vfr.real_imag(vr_fr1,vi_fr1);
@@ -1995,11 +2001,15 @@ unique_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
         Sij.real_imag(Pij1,Qij1);
         Sji.real_imag(Pji1,Qji1);
         Constraint<Cpx> S_fr1("S_fr1"), S_to1("S_to1");
-        S_fr1 = Sij - conj(Y0)*Vfr*(conj(Vfr) - conj(Vto)) - (conj(Y1)*Vi)*(conj(Vi1) - conj(Vj1));
-        S_to1 = Sji - conj(Y0)*Vto*(conj(Vto) - conj(Vfr)) - (conj(Y1)*Vj)*(conj(Vj1) - conj(Vi1));
+//        g.print();
+//        b.print();
+        S_fr1 = Sij - (conj(Y0)+conj(Yc_fr))*Vfr*conj(Vfr) + conj(Y0)*Vfr*conj(Vto) - (conj(Y1)*Vi)*(conj(Vi1) - conj(Vj1));
+        S_to1 = Sji - (conj(Y0)+conj(Yc_to))*Vto*conj(Vto) + conj(Y0)*Vto*conj(Vfr) - (conj(Y1)*Vj)*(conj(Vj1) - conj(Vi1));
         ODO->add(S_fr1.in(Et1)==0);
         ODO->add(S_to1.in(Et1)==0);
         /* Phase 2 */
+        Yc_fr.real_imag(g_fr_.in(Et2),b_fr_.in(Et2));
+        Yc_to.real_imag(g_to_.in(Et2),b_to_.in(Et2));
         Y0.real_imag(g.in(branch_id_ph2),b.in(branch_id_ph2));
         Y2.real_imag(g.in(branch_ph2),b.in(branch_ph2));
         Vfr.real_imag(vr_fr2,vi_fr2);
@@ -2011,11 +2021,13 @@ unique_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
         Sij.real_imag(Pij2,Qij2);
         Sji.real_imag(Pji2,Qji2);
         Constraint<Cpx> S_fr2("S_fr2"), S_to2("S_to2");
-        S_fr2 = Sij - conj(Y0)*Vfr*(conj(Vfr) - conj(Vto)) - (conj(Y2)*Vi)*(conj(Vi2) - conj(Vj2));
-        S_to2 = Sji - conj(Y0)*Vto*(conj(Vto) - conj(Vfr)) - (conj(Y2)*Vj)*(conj(Vj2) - conj(Vi2));
+        S_fr2 = Sij - (conj(Y0)+conj(Yc_fr))*Vfr*conj(Vfr) + conj(Y0)*Vfr*conj(Vto) - (conj(Y2)*Vi)*(conj(Vi2) - conj(Vj2));
+        S_to2 = Sji - (conj(Y0)+conj(Yc_to))*Vto*conj(Vto) + conj(Y0)*Vto*conj(Vfr) - (conj(Y2)*Vj)*(conj(Vj2) - conj(Vi2));
         ODO->add(S_fr2.in(Et2)==0);
         ODO->add(S_to2.in(Et2)==0);
         /* Phase 3 */
+        Yc_fr.real_imag(g_fr_.in(Et3),b_fr_.in(Et3));
+        Yc_to.real_imag(g_to_.in(Et3),b_to_.in(Et3));
         Y0.real_imag(g.in(branch_id_ph3),b.in(branch_id_ph3));
         Y3.real_imag(g.in(branch_ph3),b.in(branch_ph3));
         Vfr.real_imag(vr_fr3,vi_fr3);
@@ -2027,8 +2039,8 @@ unique_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
         Sij.real_imag(Pij3,Qij3);
         Sji.real_imag(Pji3,Qji3);
         Constraint<Cpx> S_fr3("S_fr3"), S_to3("S_to3");
-        S_fr3 = Sij - conj(Y0)*Vfr*(conj(Vfr) - conj(Vto)) - (conj(Y3)*Vi)*(conj(Vi3) - conj(Vj3));
-        S_to3 = Sji - conj(Y0)*Vto*(conj(Vto) - conj(Vfr)) - (conj(Y3)*Vj)*(conj(Vj3) - conj(Vi3));
+        S_fr3 = Sij - (conj(Y0)+conj(Yc_fr))*Vfr*conj(Vfr) + conj(Y0)*Vfr*conj(Vto) - (conj(Y3)*Vi)*(conj(Vi3) - conj(Vj3));
+        S_to3 = Sji - (conj(Y0)+conj(Yc_to))*Vto*conj(Vto) + conj(Y0)*Vto*conj(Vfr) - (conj(Y3)*Vj)*(conj(Vj3) - conj(Vi3));
         ODO->add(S_fr3.in(Et3)==0);
         ODO->add(S_to3.in(Et3)==0);
 //        ODO->print();
@@ -2076,14 +2088,19 @@ unique_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     ref_id.insert(ref_bus);
     ref_id = indices(T,phases,ref_id);
     Constraint<> fix_voltage_mag("fix_voltage_mag");
-    fix_voltage_mag += pow(vr.in(ref_id),2) + pow(vi.in(ref_id),2) - pow(vm_s_.in(ref_id),2);
-    ODO->add(fix_voltage_mag.in(ref_id)==0);
+    if(pmt==ACPOL){
+        fix_voltage_mag += v.in(ref_id) - vm_s_;
+    }
+    else {
+        fix_voltage_mag += pow(vr.in(ref_id),2) + pow(vi.in(ref_id),2) - pow(vm_s_.in(ref_id),2);
+    }
+//    ODO->add(fix_voltage_mag.in(ref_id)==0);
 
 
     /** Voltage angle at source bus **/
     Constraint<> fix_voltage_ang("fix_voltage_ang");
     fix_voltage_ang += vi.in(ref_id) - theta_s_.in(ref_id)*vr.in(ref_id);
-    ODO->add(fix_voltage_ang.in(ref_id)==0);
+//    ODO->add(fix_voltage_ang.in(ref_id)==0);
 
     /** FLOW CONSERVATION **/
     
@@ -2093,12 +2110,12 @@ unique_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     KCL_P  = sum(Pij, out_arcs) + sum(Pji, in_arcs) + pl.in(Nt) - sum(Pg, gen_nodes);
     KCL_Q  = sum(Qij, out_arcs) + sum(Qji, in_arcs) + ql.in(Nt) - sum(Qg, gen_nodes);
     if(pmt==ACPOL){
-        KCL_P += gs.in(Nt)*pow(v,2);
-        KCL_Q -= bs.in(Nt)*pow(v,2);
+        KCL_P += gs.in(Nt)*pow(v.in(Nt),2);
+        KCL_Q -= bs.in(Nt)*pow(v.in(Nt),2);
     }
     else if(pmt==ACRECT){
-        KCL_P += gs.in(Nt)*(pow(vr,2)+pow(vi,2));
-        KCL_Q -= bs.in(Nt)*(pow(vr,2)+pow(vi,2));
+        KCL_P += gs.in(Nt)*(pow(vr.in(Nt),2)+pow(vi.in(Nt),2));
+        KCL_Q -= bs.in(Nt)*(pow(vr.in(Nt),2)+pow(vi.in(Nt),2));
     }
     ODO->add(KCL_P.in(Nt) == 0);
     ODO->add(KCL_Q.in(Nt) == 0);
@@ -2131,12 +2148,12 @@ unique_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     /** AC voltage limit constraints. */
     if (pmt==ACRECT) {
         Constraint<> Vol_limit_UB("Vol_limit_UB");
-        Vol_limit_UB = pow(vr, 2) + pow(vi, 2);
+        Vol_limit_UB = pow(vr.in(Nt), 2) + pow(vi.in(Nt), 2);
         Vol_limit_UB -= pow(v_max.in(Nt), 2);
         ODO->add(Vol_limit_UB.in(Nt) <= 0);
         
         Constraint<> Vol_limit_LB("Vol_limit_LB");
-        Vol_limit_LB = pow(vr, 2) + pow(vi, 2);
+        Vol_limit_LB = pow(vr.in(Nt), 2) + pow(vi.in(Nt), 2);
         Vol_limit_LB -= pow(v_min.in(Nt),2);
         ODO->add(Vol_limit_LB.in(Nt) >= 0);
     }
@@ -2173,77 +2190,57 @@ unique_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
 //        Sji = pow(Pji_[phase],2) + pow(Qji_[phase],2) - product(Ymag_[phase], pow(vj_[phase],4) + pow(vi_[phase],2)*pow(vj_[phase],2) - 2*pow(vj_[phase],3)*vi_[phase]);
 //        ODO->add(Sji>=0);
 //    }
-//    auto it = exist_Et._keys->begin();
-//    //    vector<var<>> v1,v2,theta1,theta2;
-//    //    vector<vector<param<>>> _b, _g;
-//    //    Constraint Flow_P_From("Flow_P_From");
-//    //    Flow_P_From = (g_fr_ + g)*v.from()*v.from() - Pij;
-//    //    for(auto i=0; i<3; i++){
-//    //        for(auto j=0; j<3; j++){
-//    //            if(i!=j){
-//    //                Flow_P_From += _g[i][j]*v1[i].from()*v2[j].from()*cos(theta1[i].from() - theta2[j].from()) + _b[i][j]*v1[i].from()*v2[j].from()*sin(theta1[i].from() - theta2[j].from());
-//    //            }
-//    //            Flow_P_From -= _g[i][j]*v1[i].from()*v2[j].to()*cos(theta1[i].from() - theta2[j].to()) + _b[i][j]*v1[i].from()*v2[j].to()*sin(theta1[i].from() - theta2[j].to());
-//    //        }
-//    //    }
-//
-//    //    @NLconstraint(pm.model, q_fr == -(b_fr[c]+b[c,c]) *vm_fr[c]^2 -
-//    //                  sum( b[c,d]*vm_fr[c]*vm_fr[d]*cos(va_fr[c]-va_fr[d]) -
-//    //                      g[c,d]*vm_fr[c]*vm_fr[d]*sin(va_fr[c]-va_fr[d]) for d in PMs.conductor_ids(pm) if d != c) -
-//    //                  sum(-b[c,d]*vm_fr[c]*vm_to[d]*cos(va_fr[c]-va_to[d]) +
-//    //                      g[c,d]*vm_fr[c]*vm_to[d]*sin(va_fr[c]-va_to[d]) for d in PMs.conductor_ids(pm)) )
-//    //    @NLconstraint(pm.model, q_to == -(b_to[c]+b[c,c])*vm_to[c]^2 -
-//    //                  sum( b[c,d]*vm_to[c]*vm_to[d]*cos(va_to[c]-va_to[d]) -
-//    //                      g[c,d]*vm_to[c]*vm_to[d]*sin(va_to[c]-va_to[d]) for d in PMs.conductor_ids(pm) if d != c) -
-//    //                  sum(-b[c,d]*vm_to[c]*vm_fr[d]*cos(va_to[c]-va_fr[d]) +
-//    //                      g[c,d]*vm_to[c]*vm_fr[d]*sin(va_to[c]-va_fr[d]) for d in PMs.conductor_ids(pm)) )
-//    for(auto arc: arcs){
-//        auto a = (Line*)arc;
-//        for (auto phase = 0; phase<3; phase++) {
-//            for (auto &t:*T._keys) {
-//                auto src = a->_src->_name+",ph"+to_string(phase)+","+t;
-//                auto dest = a->_dest->_name+",ph"+to_string(phase)+","+t;
-//                auto index = *it++;
-//                if (a->_phases.count(phase)>0) {
-//                    auto a_index = arc->_name+",ph"+to_string(phase);
-//                    Constraint<> Flow_P_To("Flow_P_To_"+index);
-//                    Flow_P_To = (g_to_(a_index) + g(arc->_name+","+to_string(phase)+","+to_string(phase)))*v(dest)*v(dest) - Pji(index);
-//                    Constraint<> Flow_Q_To("Flow_Q_To_"+index);
-//                    Flow_Q_To = Qji(index) + (b_to_(a_index) + b(arc->_name+","+to_string(phase)+","+to_string(phase)))*v(dest)*v(dest);
-//                    Constraint<> Flow_P_From("Flow_P_From_"+index);
-//                    Flow_P_From = (g_fr_(a_index) + g(arc->_name+","+to_string(phase)
-//                                                      +","+to_string(phase)))*v(src)*v(src) - Pij(index);
-//                    Constraint<> Flow_Q_From("Flow_Q_From_"+index);
-//                    Flow_Q_From = Qij(index) + (b_fr_(a_index) + b(arc->_name+","+to_string(phase)
-//                                                                   +","+to_string(phase)))*v(src)*v(src);
-//                    for (auto phase2=0; phase2<3; phase2++) {
-//                        auto src2 = a->_src->_name+",ph"+to_string(phase2)+","+t;
-//                        auto dest2 = a->_dest->_name+",ph"+to_string(phase2)+","+t;
-//                        auto cd = arc->_name+","+to_string(phase)+","+to_string(phase2);
-//                        if (phase2!=phase) {
-//                            Flow_P_From += g(cd)*v(src)*v(src2)*cos(theta(src) - theta(src2)) + b(cd)*v(src)*v(src2)*sin(theta(src) - theta(src2));
-//                            Flow_Q_From += b(cd)*v(src)*v(src2)*cos(theta(src) - theta(src2)) - g(cd)*v(src)*v(src2)*sin(theta(src) - theta(src2));
-//                            //(g_fr[c]+g[c,c]) * vm_fr[c]^2 +
-//                            //sum( g[c,d]*vm_fr[c]*vm_fr[d]*cos(va_fr[c]-va_fr[d]) +
-//                            //    b[c,d]*vm_fr[c]*vm_fr[d]*sin(va_fr[c]-va_fr[d]) for d in PMs.conductor_ids(pm) if d != c) +
-//                            //sum(-g[c,d]*vm_fr[c]*vm_to[d]*cos(va_fr[c]-va_to[d]) +
-//                            //    -b[c,d]*vm_fr[c]*vm_to[d]*sin(va_fr[c]-va_to[d]) for d in PMs.conductor_ids(pm)) )
-//                            Flow_P_To += g(cd)*v(dest)*v(dest2)*cos(theta(dest) - theta(dest2)) + b(cd)*v(dest)*v(dest2)*sin(theta(dest) - theta(dest2));
-//                            Flow_Q_To += b(cd)*v(dest)*v(dest2)*cos(theta(dest) - theta(dest2)) - g(cd)*v(dest)*v(dest2)*sin(theta(dest) - theta(dest2));
-//                        }
-//                        Flow_P_From -= g(cd)*v(src)*v(dest2)*cos(theta(src) - theta(dest2)) + b(cd)*v(src)*v(dest2)*sin(theta(src) - theta(dest2));
-//                        Flow_Q_From += g(cd)*v(src)*v(dest2)*sin(theta(src) - theta(dest2)) - b(cd)*v(src)*v(dest2)*cos(theta(src) - theta(dest2));
-//                        Flow_P_To -= g(cd)*v(dest)*v(src2)*cos(theta(dest) - theta(src2)) + b(cd)*v(dest)*v(src2)*sin(theta(dest) - theta(src2));
-//                        Flow_Q_To += g(cd)*v(dest)*v(src2)*sin(theta(dest) - theta(src2)) - b(cd)*v(dest)*v(src2)*cos(theta(dest) - theta(src2));
-//                    }
-//                    ODO->add(Flow_P_From==0);
-//                    ODO->add(Flow_Q_From==0);
-//                    ODO->add(Flow_P_To==0);
-//                    ODO->add(Flow_Q_To==0);
-//                }
-//            }
-//        }
-//    }
+    if(pmt==ACPOL){
+        auto it = Et._keys->begin();
+        for(auto arc: arcs){
+            auto a = (Line*)arc;
+            for (auto phase = 0; phase<3; phase++) {
+                for (auto &t:*T._keys) {
+                    auto src = t+",ph"+to_string(phase+1)+","+a->_src->_name;
+                    auto dest = t+",ph"+to_string(phase+1)+","+a->_dest->_name;
+                    if (a->_phases.count(phase+1)>0) {
+                        auto index = *it++;
+                        auto a_index = "ph"+to_string(phase+1)+","+arc->_name;
+                        auto a_key = "ph"+to_string(phase+1)+",ph"+to_string(phase+1)+","+arc->_name;
+                        Constraint<> Flow_P_To("Flow_P_To_"+index);
+                        Flow_P_To = (g_to_(a_index) + g(a_key))*v(dest)*v(dest) - Pji(index);
+                        Constraint<> Flow_Q_To("Flow_Q_To_"+index);
+                        Flow_Q_To = Qji(index) + (b_to_(a_index) + b(a_key))*v(dest)*v(dest);
+                        Constraint<> Flow_P_From("Flow_P_From_"+index);
+                        Flow_P_From = (g_fr_(a_index) + g(a_key))*v(src)*v(src) - Pij(index);
+                        Constraint<> Flow_Q_From("Flow_Q_From_"+index);
+                        Flow_Q_From = Qij(index) + (b_fr_(a_index) + b(a_key))*v(src)*v(src);
+                        for (auto phase2=0; phase2<3; phase2++) {
+                            auto src2 = t+",ph"+to_string(phase2+1)+","+a->_src->_name;
+                            auto dest2 = t+",ph"+to_string(phase2+1)+","+a->_dest->_name;
+                            auto cd = "ph"+to_string(phase+1)+",ph"+to_string(phase2+1)+","+arc->_name;
+                            if (phase2!=phase && a->_phases.count(phase2+1)>0) {
+                                Flow_P_From += g(cd)*v(src)*v(src2)*cos(theta(src) - theta(src2)) + b(cd)*v(src)*v(src2)*sin(theta(src) - theta(src2));
+                                Flow_Q_From += b(cd)*v(src)*v(src2)*cos(theta(src) - theta(src2)) - g(cd)*v(src)*v(src2)*sin(theta(src) - theta(src2));
+                                //(g_fr[c]+g[c,c]) * vm_fr[c]^2 +
+                                //sum( g[c,d]*vm_fr[c]*vm_fr[d]*cos(va_fr[c]-va_fr[d]) +
+                                //    b[c,d]*vm_fr[c]*vm_fr[d]*sin(va_fr[c]-va_fr[d]) for d in PMs.conductor_ids(pm) if d != c) +
+                                //sum(-g[c,d]*vm_fr[c]*vm_to[d]*cos(va_fr[c]-va_to[d]) +
+                                //    -b[c,d]*vm_fr[c]*vm_to[d]*sin(va_fr[c]-va_to[d]) for d in PMs.conductor_ids(pm)) )
+                                Flow_P_To += g(cd)*v(dest)*v(dest2)*cos(theta(dest) - theta(dest2)) + b(cd)*v(dest)*v(dest2)*sin(theta(dest) - theta(dest2));
+                                Flow_Q_To += b(cd)*v(dest)*v(dest2)*cos(theta(dest) - theta(dest2)) - g(cd)*v(dest)*v(dest2)*sin(theta(dest) - theta(dest2));
+                            }
+                            if (a->_phases.count(phase2+1)>0) {
+                                Flow_P_From -= g(cd)*v(src)*v(dest2)*cos(theta(src) - theta(dest2)) + b(cd)*v(src)*v(dest2)*sin(theta(src) - theta(dest2));
+                                Flow_Q_From += g(cd)*v(src)*v(dest2)*sin(theta(src) - theta(dest2)) - b(cd)*v(src)*v(dest2)*cos(theta(src) - theta(dest2));
+                                Flow_P_To -= g(cd)*v(dest)*v(src2)*cos(theta(dest) - theta(src2)) + b(cd)*v(dest)*v(src2)*sin(theta(dest) - theta(src2));
+                                Flow_Q_To += g(cd)*v(dest)*v(src2)*sin(theta(dest) - theta(src2)) - b(cd)*v(dest)*v(src2)*cos(theta(dest) - theta(src2));
+                            }
+                        }
+                        ODO->add(Flow_P_From==0);
+                        ODO->add(Flow_Q_From==0);
+                        ODO->add(Flow_P_To==0);
+                        ODO->add(Flow_Q_To==0);
+                    }
+                }
+            }
+        }
+    }
 //    /* (g_fr[c]+g[c,c]) * vm_fr[c]^2 +
 //     sum( g[c,d]*vm_fr[c]*vm_fr[d]*cos(va_fr[c]-va_fr[d]) +
 //     b[c,d]*vm_fr[c]*vm_fr[d]*sin(va_fr[c]-va_fr[d]) for d in PMs.conductor_ids(pm) if d != c) +

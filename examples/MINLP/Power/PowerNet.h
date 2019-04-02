@@ -196,13 +196,15 @@ public:
     
     
     /** Indices Sets */
-    indices hours; /**< Hours */
+    indices hours = indices("hours"); /**< Hours */
     //    indices months = time("jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"); /**< Months */
     indices months = time("apr", "aug", "dec"); /**< Months */
+//    months._name = "months";
     //    indices months = time("jan");
     indices typical_days = time("week","peak","weekend");
+//    typical_days._name = "typical_days";
     //    indices typical_days = time("week");
-    indices phase_T, T, Nt = indices("Nt"), Nt_load, Nt_no_load, Et = indices("Et"), pot_E_ph, N_ph, exist_E_ph, E_ph = indices("Eph"), E_ph1 = indices("Eph1"),E_ph2 = indices("Eph2"), E_ph3 = indices("Eph3"), Gt = indices("Gt"), exist_Gt, exist_Bt, exist_Et, pot_Et, pot_Gt, pot_Bt, Bt, Bt1, Gt1, Wt, PVt, PV_pot_t, pot_gen, pot_batt, pot_edges, pot_pv;
+    indices phase_T, T= indices("Time"), Nt = indices("Nt"), Nt_load, Nt_no_load, Et = indices("Et"), pot_E_ph, N_ph= indices("Nph"), exist_E_ph, E_ph = indices("Eph"), E_ph1 = indices("Eph1"),E_ph2 = indices("Eph2"), E_ph3 = indices("Eph3"), Gt = indices("Gt"), exist_Gt, exist_Bt, exist_Et, pot_Et, pot_Gt, pot_Bt, Bt, Bt1, Gt1, Wt, PVt, PV_pot_t, pot_gen, pot_batt, pot_edges, pot_pv;
     indices Et_opt, Gt_opt, Bt_opt, Bt1_opt, Wt_opt, PVt_opt;
     indices cross_phase = indices("cross_phase");
     indices N_ph1 = indices("Nph1"),N_ph2 = indices("Nph2"), N_ph3 = indices("Nph3");

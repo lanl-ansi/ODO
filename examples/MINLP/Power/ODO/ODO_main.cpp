@@ -32,7 +32,7 @@ int main (int argc, char * argv[])
     
     string downl_json_cmd, downl_xls_cmd;
     string Json_str, Xls_str;
-    string Json, Invest, mtype = "ACPOL";
+    string Json, Invest, mtype = "ACRECT";
     string solver_str="ipopt", default_str="no";
     int output = 0;
     bool relax = false, use_cplex = false, use_gurobi = false, default_args=false;
@@ -48,7 +48,7 @@ int main (int argc, char * argv[])
     opt.add_option("j", "json", "Json input file name (def. Net.json)", Json );
     opt.add_option("l", "log", "Log level (def. 0)", log_level );
     opt.add_option("t", "time", "time in hours (def. 1)", nb_hours );
-    opt.add_option("m", "model", "power flow model: ACPOL/ACRECT/DISTFLOW/LINDISTFLOW (def. ACPOL)", mtype );
+    opt.add_option("m", "model", "power flow model: ACPOL/ACRECT/DISTFLOW/LINDISTFLOW (def. ACRECT)", mtype );
     opt.add_option("s", "solver", "Solvers: ipopt/cplex/gurobi, default = ipopt", solver_str);
     opt.add_option("d", "default", "Use default arguments for input files: yes/no, default = no", default_str);
     
@@ -133,7 +133,7 @@ int main (int argc, char * argv[])
     }
     PowerNet grid;
     PowerModelType pmt = ACRECT;
-    if(mtype.compare("DISTF")==0) pmt = DISTF;
+    if(mtype.compare("ACPOL")==0) pmt = ACPOL;
     else if(mtype.compare("CDISTF")==0) pmt = CDISTF;
     if (pmt==LDISTF) {
         DebugOn("Using Linear Distflow model\n");

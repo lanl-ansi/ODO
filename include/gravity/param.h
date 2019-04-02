@@ -1318,6 +1318,9 @@ namespace gravity {
             return this->in(np._keys);
         }
 
+        void reverse_sign(){
+            throw invalid_argument("Cannot reverse sign of param");
+        }
         
         template<typename... Args>
         param in(const indices& vec1, Args&&... args) {
