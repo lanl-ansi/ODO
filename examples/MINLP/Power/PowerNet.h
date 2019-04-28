@@ -203,7 +203,7 @@ public:
     indices typical_days = time("week","peak","weekend");
 //    typical_days._name = "typical_days";
     //    indices typical_days = time("week");
-    indices phase_T, T= indices("Time"), Nt = indices("Nt"), Nt_load, Nt_no_load, Et = indices("Et"), pot_E_ph, N_ph= indices("Nph"), exist_E_ph, E_ph = indices("Eph"), E_ph1 = indices("Eph1"),E_ph2 = indices("Eph2"), E_ph3 = indices("Eph3"), Gt = indices("Gt"), exist_Gt, exist_Bt, exist_Et, pot_Et, pot_Gt, pot_Bt, Bt, Bt1, Gt1, Wt, PVt, PV_pot_t, pot_gen, pot_batt, pot_edges, pot_pv;
+    indices phase_T, T= indices("Time"), Nt = indices("Nt"), Nt_load, Nt_no_load, Et = indices("Et"), Et1 = indices("Et1"), Et2 = indices("Et2"), Et3 = indices("Et3"), pot_G_ph = indices("pot_Gph"), pot_E_ph = indices("pot_Eph"), G_ph= indices("Gph"), N_ph= indices("Nph"), exist_G_ph = indices("Exist_Gph"), exist_E_ph = indices("Exist_Eph"), E_ph = indices("Eph"), E_ph1 = indices("Eph1"),E_ph2 = indices("Eph2"), E_ph3 = indices("Eph3"), Gt = indices("Gt"), exist_Gt, exist_Bt, exist_Et, pot_Et, pot_Gt, pot_Bt, Bt, Bt1, Gt1, Wt, PVt, PV_pot_t, pot_gen, pot_batt, pot_edges, pot_pv;
     indices Et_opt, Gt_opt, Bt_opt, Bt1_opt, Wt_opt, PVt_opt;
     indices cross_phase = indices("cross_phase");
     indices N_ph1 = indices("Nph1"),N_ph2 = indices("Nph2"), N_ph3 = indices("Nph3");
@@ -276,7 +276,7 @@ public:
     
     void fix_investment();
     
-    unique_ptr<Model<>> build_ODO_model(PowerModelType model=LDISTF, int output=5, double tol=1e-6, int nb_hours = 24);
+    shared_ptr<Model<>> build_ODO_model(PowerModelType model=LDISTF, int output=5, double tol=1e-6, int nb_hours = 24);
     
     unique_ptr<Model<>> build_ACOPF_N_1(PowerModelType Model=ACPOL, int output=0, double tol=1e-6);
     

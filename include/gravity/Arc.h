@@ -61,23 +61,7 @@ public:
     }
     
     void set_phases(string phases){
-        if(phases.empty())
-            return;
-        auto pos = phases.find_first_of(",");
-        auto ph = phases.substr(0,pos);
-        _phases.insert(stoi(ph));
-        phases = phases.substr(pos+1);
-        if(phases.empty())
-            return;
-        pos = phases.find_first_of(",");
-        ph = phases.substr(0,pos);
-        _phases.insert(stoi(ph));
-        phases = phases.substr(pos+1);
-        if(phases.empty())
-            return;
-        pos = phases.find_first_of(",");
-        ph = phases.substr(0,pos);
-        _phases.insert(stoi(ph));
+        _phases = gravity::get_phases(phases);
     }
     
     /* Connects the current arc to its source and destination, adding itself to the list of branches in these nodes */

@@ -73,6 +73,8 @@ namespace gravity {
         bool                            _is_vector = false; /**< True if the constant is a vector or matrix */
         size_t                          _dim[2] = {1,1}; /*< dimension of current object */
         
+        bool                            _polar = false; /**< True in case this is a complex number with a polar representation, rectangular representation if false */
+        
         virtual ~constant_(){};
         CType get_type() const { return _type;}
         
@@ -150,6 +152,7 @@ namespace gravity {
             return (_type==func_c);
         };
         
+        virtual void update_double_index() {};
         
         virtual Sign get_all_sign() const {return unknown_;};
         virtual Sign get_sign(size_t idx=0) const{return unknown_;};

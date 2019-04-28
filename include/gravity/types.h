@@ -28,7 +28,7 @@ namespace gravity{
 #define Debug(x)
 #define DebugOn(x) cout << x
 #define Warning(x) cout << x
-//#define Warning(x)
+#define WarningOff(x)
 #define DebugOff(x)
     
     typedef unsigned int uint; /* Index type */
@@ -51,7 +51,7 @@ namespace gravity{
     typedef enum { const_, lin_, quad_, pol_, nlin_ } FType;  /* Function type in constraint: Constant, Linear, Quadratic, Polynomial or Nonlinear function */
     typedef enum { lin_m, quad_m, pol_m, nlin_m } MType;  /* Model type: Linear, Quadratic, Polynomial or Nonlinear function */
     typedef enum { minimize, maximize } ObjectiveType;
-    typedef enum { id_, plus_, minus_, product_, div_, power_, cos_, sin_, sqrt_, exp_, log_, tan_, relu_, unit_step_, min_, max_} OperatorType;  /* Operation type in the expression tree */
+    typedef enum { id_, plus_, minus_, product_, div_, power_, cos_, sin_, sqrt_, exp_, log_, tan_, atan2_, relu_, unit_step_, min_, max_} OperatorType;  /* Operation type in the expression tree */
     
     typedef enum { R_, R_p_, C_} SpaceType;  /* Real, Positive Reals, Complex */
     
@@ -483,6 +483,32 @@ namespace gravity{
             _keys_map->insert(make_pair<>(key,_keys->size()-1));
         }
         
+        void extend(const indices& T) {
+            if(!_ids){
+                *this = indices(*this,T);
+                return;
+            }
+            if (_ids->size()>1) {//double indexed
+                auto dim = _ids->size();
+                auto new_dim = T.size()*dim;
+                _ids->resize(new_dim);
+                for (auto i =dim; i<new_dim; i++) {
+                    _ids->at(i).resize(_ids->at(i%dim).size());
+                    for (auto j =0; j<_ids->at(i).size(); j++) {
+                        _ids->at(i).at(j) = _ids->at(i%dim).at(j);
+                    }
+                }
+            }
+            else {
+                auto dim = _ids->at(0).size();
+                auto new_dim = T.size()*dim;
+                _ids->at(0).resize(new_dim);
+                for (auto i = dim; i<new_dim; i++) {
+                    _ids->at(0).at(i) = _ids->at(0).at(i%dim);
+                }
+            }
+        }
+        
         indices(const list<indices>& vecs) {
 //            if (vecs.size()==2) {
 //                _type = matrix_;
@@ -496,7 +522,7 @@ namespace gravity{
             vector<size_t> dims;
             for(auto &vec: vecs){
                 if(vec.empty()){
-                    Warning("\n\nWARNING: Defining indices with an empty vector!\n\n");
+                    WarningOff("\n\nWARNING: Defining indices with an empty vector!\n\n");
                     //                    exit(-1);
                 }
                 if(vec._time_extended){
@@ -644,7 +670,7 @@ namespace gravity{
             
         size_t size() const {
             if(is_indexed()){
-                return _ids->size();
+                return _ids->at(0).size();
             }
             return _keys->size();
         };
@@ -674,6 +700,7 @@ namespace gravity{
         }
     };
     
+    indices operator-(const indices& s1, const indices& s2);
     
     class node_pairs{
         

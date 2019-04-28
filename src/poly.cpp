@@ -11,42 +11,7 @@
 
 using namespace std;
 
-string clean_print(bool pos, const string& v, bool brackets){
-    if(pos){
-        if (v=="-1" || v==" - 1" || v=="(-1,0)") {
-            return " - ";
-        }
-        else if (v.front()=='-'){
-            return " - " + v.substr(1);
-        }
-        else if(v=="1" || v==" + 1" || v=="(1,0)") {
-            return " + ";
-        }
-        else if(brackets){
-            return " + ("+v+")";
-        }
-        else{
-            return " + " + v;
-        }
-    }
-    else {
-        if (v == "-1" || v==" - 1" || v=="(-1,0)") {
-            return " + ";
-        }
-        else if (v.front()=='-'){
-            return " + " + v.substr(1);
-        }
-        else if (v=="1" || v==" + 1" || v=="(1,0)"){
-            return " - ";
-        }
-        else if(brackets){
-            return " - ("+v+")";
-        }
-        else{
-            return " - " + v;
-        }
-    }
-}
+
 
 namespace gravity{
 
@@ -632,11 +597,12 @@ namespace gravity{
         return str;
     }
     
+    
     string lterm::to_str(size_t ind, int prec) const{
         string str;
         auto c_new = _coef;
         auto p_new = _p;
-        if (p_new->_is_vector) {
+        if (p_new->_is_vector || p_new->is_double_indexed()) {
             str += print_transposed(ind,prec);
         }
         else{

@@ -21,8 +21,6 @@
 
 using namespace std;
 
-string clean_print(bool pos, const string& v, bool brackets = false);
-    
 namespace gravity {
     
     
