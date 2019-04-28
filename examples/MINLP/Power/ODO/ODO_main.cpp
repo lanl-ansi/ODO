@@ -199,7 +199,7 @@ int main (int argc, char * argv[])
     }
     else {
         solver<> ACUC(ODO,ipopt);
-        return_status = ACUC.run(output=5, tol = 1e-5, "ma97");
+        return_status = ACUC.run(output=5, tol = 1e-5);
         auto pg = ODO->get_var<double>("Pg");
         pg.print_vals(10);
         solver_time_end = get_wall_time();
