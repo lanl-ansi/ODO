@@ -1489,45 +1489,79 @@ namespace gravity {
             auto nb_sep1 = count(_indices->_keys->front().begin(), _indices->_keys->front().end(), ',');
             auto nb_sep2 = count(ids._keys->front().begin(), ids._keys->front().end(), ',');
             int pos = 0;
-            bool is_prefix = false, is_suffix = false;
-            if(_indices->_type!=to_ && _indices->_type!=from_ && nb_sep2>nb_sep1){
-                pos = nthOccurrence(ids._keys->front(), ",", nb_sep2-nb_sep1);
-                key = ids._keys->front().substr(pos+1);
-                auto it1 = _indices->_keys_map->find(key);
-                if (it1 == _indices->_keys_map->end()){
-                    pos = nthOccurrence(ids._keys->front(), ",", nb_sep1+1);
-                    key = ids._keys->front().substr(0,pos);
-                    it1 = _indices->_keys_map->find(key);
-                    if (it1 == _indices->_keys_map->end()){
+//            bool is_prefix = false, is_suffix = false;
+//            if(_indices->_type!=to_ && _indices->_type!=from_ && nb_sep2>nb_sep1){
+//                pos = nthOccurrence(ids._keys->front(), ",", nb_sep2-nb_sep1);
+//                key = ids._keys->front().substr(pos+1);
+//                auto it1 = _indices->_keys_map->find(key);
+//                if (it1 == _indices->_keys_map->end()){
+//                    pos = nthOccurrence(ids._keys->front(), ",", nb_sep1+1);
+//                    key = ids._keys->front().substr(0,pos);
+//                    it1 = _indices->_keys_map->find(key);
+//                    if (it1 == _indices->_keys_map->end()){
+//                        throw invalid_argument("In function param.in(const vector<Tobj>& vec), vec has unknown key: "+key);
+//                    }
+//                    else {
+//                        is_prefix = true;
+//                    }
+//                }
+//                else {
+//                    is_suffix = true;
+//                }
+//            }
+//            else if(_indices->_type!=to_ && _indices->_type!=from_ && nb_sep1>nb_sep2){
+//                pos = nthOccurrence(_indices->_keys->front(), ",", nb_sep1-nb_sep2);
+//                key = _indices->_keys->front().substr(0,pos) + "," + ids._keys->front();
+//                auto it1 = _indices->_keys_map->find(key);
+//                if (it1 == _indices->_keys_map->end()){
+//                    pos = nthOccurrence(_indices->_keys->front(), ",", nb_sep2+1);
+//                    key = ids._keys->front()+ "," + _indices->_keys->front().substr(pos+1);
+//                    it1 = _indices->_keys_map->find(key);
+//                    if (it1 == _indices->_keys_map->end()){
+//                        throw invalid_argument("In function param.in(const vector<Tobj>& vec), vec has unknown key");
+//                    }
+//                    else {
+//                        is_prefix = true;
+//                    }
+//                }
+//                else {
+//                    is_suffix = true;
+//                }
+//            }
+            int sep_pos = -1;
+            bool found = false;
+            if(nb_sep2>nb_sep1){//Key_ids has more indices
+                for(auto key: *ids._keys){
+                    if(ids._excluded_keys.count(idx++)!=0){
+                        continue;
+                    }
+                    for(auto key_param: *_indices->_keys){
+                        auto new_pos = key.find(key_param);
+                        if(new_pos!=string::npos){
+                            found = true;
+                            if(sep_pos==-1){
+                                sep_pos=new_pos;
+                            }
+                            else if(sep_pos!=new_pos){
+                                throw invalid_argument("In function param.in(const vector<Tobj>& vec), vec has indexing issues: "+key);
+                            }
+                            break;
+                        }
+                    }
+                    if(!found){
                         throw invalid_argument("In function param.in(const vector<Tobj>& vec), vec has unknown key: "+key);
                     }
-                    else {
-                        is_prefix = true;
-                    }
-                }
-                else {
-                    is_suffix = true;
                 }
             }
-            else if(_indices->_type!=to_ && _indices->_type!=from_ && nb_sep1>nb_sep2){
-                pos = nthOccurrence(_indices->_keys->front(), ",", nb_sep1-nb_sep2);
-                key = _indices->_keys->front().substr(0,pos) + "," + ids._keys->front();
-                auto it1 = _indices->_keys_map->find(key);
-                if (it1 == _indices->_keys_map->end()){
-                    pos = nthOccurrence(_indices->_keys->front(), ",", nb_sep2+1);
-                    key = ids._keys->front()+ "," + _indices->_keys->front().substr(pos+1);
-                    it1 = _indices->_keys_map->find(key);
-                    if (it1 == _indices->_keys_map->end()){
-                        throw invalid_argument("In function param.in(const vector<Tobj>& vec), vec has unknown key");
-                    }
-                    else {
-                        is_prefix = true;
-                    }
-                }
-                else {
-                    is_suffix = true;
-                }
-            }
+//            else {
+//                auto key_ids = ids._keys->front();
+//                for(auto key: *_indices->_keys){
+//                    sep_pos = key.find(key_ids);
+//                    if(sep_pos!=string::npos){
+//                        break;
+//                    }
+//                }
+//            }            
             for(auto key: *ids._keys){
                 if(ids._excluded_keys.count(idx++)!=0){
                     excluded += key + ",";
@@ -1551,22 +1585,12 @@ namespace gravity {
                 else {
                     /* Compare indexing and truncate extra indices */
                     if(nb_sep2>nb_sep1){
-                        if(is_suffix){
-                            pos = nthOccurrence(key, ",", nb_sep2-nb_sep1);
-                            key = key.substr(pos+1);
-                        }
-                        else {
-                            pos = nthOccurrence(key, ",", nb_sep1+1);
-                            key = key.substr(0,pos);
-                        }
+                        key = key.substr(sep_pos);
+                        pos = nthOccurrence(key, ",", nb_sep1+1);
+                        key = key.substr(0,pos);
                     }
                     else if(nb_sep1>nb_sep2){
-                        if(is_suffix){
-                            key = _indices->_keys->front().substr(0,pos) + "," + key;
-                        }
-                        else {
-                            key = ids._keys->front()+ "," + _indices->_keys->front().substr(pos+1);
-                        }
+                        throw invalid_argument("indexing error");
                     }
                 }
                 auto it1 = _indices->_keys_map->find(key);

@@ -1158,10 +1158,13 @@ int PowerNet::readODO(const string& fname){
         row_it = ws.rows().begin();
         row_it++;//SKIP FRIST ROW
         
-        for (auto n: nodes) {
-            auto bus = (Bus*)n;
+         for (auto i = 0; i<nodes.size(); i++) {
             unsigned index = 0;
             auto row = *row_it++;
+             auto bname = row[0].to_string();
+             bname = bname.substr(4);//remove the node string
+             auto bus = (Bus*)get_node(bname);
+
             while (row[0].to_string().compare((*row_it)[0].to_string())==0) {
                 if (row[3].value<int>()!=0) {
                     min_bat = row[2].value<int>();
@@ -1184,17 +1187,25 @@ int PowerNet::readODO(const string& fname){
                         if(_nb_eff_pieces<nb_eff_pieces){
                             _nb_eff_pieces = nb_eff_pieces;
                         }
-                        for(auto p =1; p<= _nb_eff_pieces;p++){
-                            auto str = "eff"+to_string(p)+","+copy->_name;
-                            if (p > nb_eff_pieces) {
-                                eff_a.add_val(str, (copy->_y_eff[nb_eff_pieces] - copy->_y_eff[nb_eff_pieces-1])/(copy->_x_eff[nb_eff_pieces] - copy->_x_eff[nb_eff_pieces-1]));
-                                eff_b.add_val(str, copy->_y_eff[nb_eff_pieces] - eff_a.eval()*copy->_x_eff[nb_eff_pieces]);
+                        for (int ph = 1; ph<=3; ph++) {
+                            if(bus->_phases.count(ph)==0 || _all_battery_inverters[index]._phases.count(ph)==0){
+                                continue;
                             }
-                            else{
-                                eff_a.add_val(str, (copy->_y_eff[p] - copy->_y_eff[p-1])/(copy->_x_eff[p] - copy->_x_eff[p-1]));
-                                eff_b.add_val(str, copy->_y_eff[p] - eff_a.eval()*copy->_x_eff[p]);
+                            B_ph.insert("ph"+to_string(ph)+","+copy->_name);
+                            exist_B_ph.insert("ph"+to_string(ph)+","+copy->_name);
+                            for(auto p =1; p<= _nb_eff_pieces;p++){
+                                auto str = "ph"+to_string(ph)+","+copy->_name+",eff"+to_string(p);
+                                if (p > nb_eff_pieces) {
+                                    eff_a.add_val(str, (copy->_y_eff[nb_eff_pieces] - copy->_y_eff[nb_eff_pieces-1])/(copy->_x_eff[nb_eff_pieces] - copy->_x_eff[nb_eff_pieces-1]));
+                                    eff_b.add_val(str, copy->_y_eff[nb_eff_pieces] - eff_a.eval()*copy->_x_eff[nb_eff_pieces]);
+                                }
+                                else{
+                                    eff_a.add_val(str, (copy->_y_eff[p] - copy->_y_eff[p-1])/(copy->_x_eff[p] - copy->_x_eff[p-1]));
+                                    eff_b.add_val(str, copy->_y_eff[p] - eff_a.eval()*copy->_x_eff[p]);
+                                }
                             }
                         }
+                        
                     }
                     for (unsigned i = exist; i<exist+max_bat; i++) {
                         auto copy = new BatteryInverter(_all_battery_inverters[index]);
@@ -1204,6 +1215,7 @@ int PowerNet::readODO(const string& fname){
                         bus->_pot_bat.push_back(copy);
                         _potential_battery_inverters.push_back(copy);
                         _battery_inverters.push_back(copy);
+                        
                         this->min_batt_invest.add_val(copy->_name, min_bat);
                         this->max_batt_invest.add_val(copy->_name, max_bat);
                         this->inverter_capcost.add_val(copy->_name,copy->_capcost);
@@ -1215,17 +1227,25 @@ int PowerNet::readODO(const string& fname){
                         if(_nb_eff_pieces<nb_eff_pieces){
                             _nb_eff_pieces = nb_eff_pieces;
                         }
-                        for(auto p =1; p<= _nb_eff_pieces;p++){
-                            auto str = "eff"+to_string(p)+","+copy->_name;
-                            if (p > nb_eff_pieces) {
-                                eff_a.add_val(str, (copy->_y_eff[nb_eff_pieces] - copy->_y_eff[nb_eff_pieces-1])/(copy->_x_eff[nb_eff_pieces] - copy->_x_eff[nb_eff_pieces-1]));
-                                eff_b.add_val(str, copy->_y_eff[nb_eff_pieces] - eff_a.eval()*copy->_x_eff[nb_eff_pieces]);
+                        for (int ph = 1; ph<=3; ph++) {
+                            if(bus->_phases.count(ph)==0 || _all_battery_inverters[index]._phases.count(ph)==0){
+                                continue;
                             }
-                            else{
-                                eff_a.add_val(str, (copy->_y_eff[p] - copy->_y_eff[p-1])/(copy->_x_eff[p] - copy->_x_eff[p-1]));
-                                eff_b.add_val(str, copy->_y_eff[p] - eff_a.eval()*copy->_x_eff[p]);
+                            B_ph.insert("ph"+to_string(ph)+","+copy->_name);
+                            pot_B_ph.insert("ph"+to_string(ph)+","+copy->_name);
+                            for(auto p =1; p<= _nb_eff_pieces;p++){
+                                auto str = "ph"+to_string(ph)+","+copy->_name+",eff"+to_string(p);
+                                if (p > nb_eff_pieces) {
+                                    eff_a.add_val(str, (copy->_y_eff[nb_eff_pieces] - copy->_y_eff[nb_eff_pieces-1])/(copy->_x_eff[nb_eff_pieces] - copy->_x_eff[nb_eff_pieces-1]));
+                                    eff_b.add_val(str, copy->_y_eff[nb_eff_pieces] - eff_a.eval()*copy->_x_eff[nb_eff_pieces]);
+                                }
+                                else{
+                                    eff_a.add_val(str, (copy->_y_eff[p] - copy->_y_eff[p-1])/(copy->_x_eff[p] - copy->_x_eff[p-1]));
+                                    eff_b.add_val(str, copy->_y_eff[p] - eff_a.eval()*copy->_x_eff[p]);
+                                }
                             }
                         }
+                        
                     }
                 }
                 row = *row_it++;
@@ -1879,15 +1899,12 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     Et3 = indices(T,E_ph3);
     Gt = indices(T,G_ph);
     exist_Gt = indices(T,exist_G_ph);
-    exist_Bt = indices(T,phases,_existing_battery_inverters);
+    exist_Bt = indices(T,exist_B_ph);
     exist_Et = indices(T,exist_E_ph);
     pot_Gt = indices(T,pot_G_ph);
-    pot_Bt = indices(T,_potential_battery_inverters);
+    pot_Bt = indices(T,pot_B_ph);
     pot_Et = indices(T,pot_E_ph);
-    Bt = indices(T,phases,_battery_inverters);
-    auto T1 = T.exclude(T.first());/**< Excluding first time step */
-    Bt1 = indices(T1,phases,_battery_inverters);
-    Gt1 = indices(T1,phases,gens);
+    Bt = indices(T,B_ph);
     Wt = indices(T,phases,_all_wind_gens);
     PVt = indices(T,phases,_all_PV_gens);
     PV_pot_t = indices(T,phases,_potential_PV_gens);
@@ -2305,68 +2322,70 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     ODO->add(OnOff_maxQ_N.in(pot_Gt) >= 0);
 
      /**  PV **/
-//
-//    /*  On/Off on Potential PV */
-//    Constraint OnOffPV("OnOffPV");
-//    OnOffPV += Pv_cap - w_pv*pv_max;
-//    ODO->add(OnOffPV.in(indices(_potential_PV_gens)) <= 0);
-//    //        ODO->get_constraint("OnOffPV")->print_expanded();
+
+    /*  On/Off on Potential PV */
+//    Constraint<> OnOffPV("OnOffPV");
+//    OnOffPV += Pv_cap.in(_potential_PV_gens) - w_pv*pv_max.in(_potential_PV_gens);
+//    ODO->add(OnOffPV.in(_potential_PV_gens) <= 0);
 //
 //    /*  Max Cap on Potential PV */
-//    Constraint MaxCapPV("MaxCapPV");
-//    MaxCapPV += Pv - Pv_cap*pv_out;
+//    Constraint<> MaxCapPV("MaxCapPV");
+//    MaxCapPV += Pv.in(PV_pot_t) - Pv_cap.in(PV_pot_t)*pv_out.in(PV_pot_t);
 //    ODO->add(MaxCapPV.in(PV_pot_t) <= 0);
-//    //        ODO->get_constraint("MaxCapPV")->print_expanded();
 //
 //    /*  Existing PV */
-//    Constraint existPV("existPV");
+//    Constraint<> existPV("existPV");
 //    existPV += Pv - pv_max*pv_out;
 //    ODO->add(existPV.in(indices(_existing_PV_gens, T)) <= 0);
-//    //        ODO->get_constraint("existPV")->print_expanded();
-//
-//
-//    /**  BATTERIES **/
-//
-//    /*  Apparent Power Limit on Potential Batteries */
-//    Constraint Apparent_Limit_Batt_Pot("Apparent_Limit_Batt_Potential");
-//    Apparent_Limit_Batt_Pot += power(Pb, 2) + power(Qb, 2);
-//    Apparent_Limit_Batt_Pot -= power(w_b,2)*power(pb_max, 2);
-//    ODO->add(Apparent_Limit_Batt_Pot.in(pot_Bt) <= 0);
-//
-//    /*  Apparent Power Limit on Existing Batteries */
-//    Constraint Apparent_Limit_Batt("Apparent_Limit_Batt_Existing");
-//    Apparent_Limit_Batt += power(Pb, 2) + power(Qb, 2);
-//    Apparent_Limit_Batt -= power(pb_max, 2);
-//    ODO->add(Apparent_Limit_Batt.in(exist_Bt) <= 0);
-//
-//
-//    /*  State Of Charge */
-//    Constraint State_Of_Charge("State_Of_Charge");
-//    State_Of_Charge = Sc - Sc.prev() + Pb_;
-//    ODO->add(State_Of_Charge.in(Bt1) == 0);
+
+
+    /**  BATTERIES **/
+
+    /*  Apparent Power Limit on Potential Batteries */
+    Constraint<> Apparent_Limit_Batt_Pot("Apparent_Limit_Batt_Potential");
+    Apparent_Limit_Batt_Pot += pow(Pb.in(pot_Bt), 2) + pow(Qb.in(pot_Bt), 2);
+    Apparent_Limit_Batt_Pot -= pow(w_b.in(pot_Bt),2)*pow(pb_max.in(pot_Bt), 2);
+    ODO->add(Apparent_Limit_Batt_Pot.in(pot_Bt) <= 0);
+
+    /*  Apparent Power Limit on Existing Batteries */
+    Constraint<> Apparent_Limit_Batt("Apparent_Limit_Batt_Existing");
+    Apparent_Limit_Batt += pow(Pb.in(exist_Bt), 2) + pow(Qb.in(exist_Bt), 2);
+    Apparent_Limit_Batt -= pow(pb_max.in(exist_Bt), 2);
+    ODO->add(Apparent_Limit_Batt.in(exist_Bt) <= 0);
+
+
+    /*  State Of Charge */
+    auto T1 = T.exclude(T.first());/**< Excluding first time step */
+    auto Tn = T.exclude(T.last());/**< Excluding last time step */
+    Bt1 = indices(T1,B_ph);
+    Btn = indices(Tn,B_ph);
+    Constraint<> State_Of_Charge("State_Of_Charge");
+    State_Of_Charge = Sc.in(Bt1) - Sc.in(Btn) + Pb_.in(Bt1);
+    ODO->add(State_Of_Charge.in(Bt1) == 0);
 //
 //    /*  State Of Charge 0 */
-//    auto Bat0 = indices(_battery_inverters,phases,T.start());
-//    Constraint State_Of_Charge0("State_Of_Charge0");
+//    auto Bat0 = indices(_battery_inverters,phases,T.first());
+//    Constraint<> State_Of_Charge0("State_Of_Charge0");
 //    State_Of_Charge0 = Sc;
 //    ODO->add(State_Of_Charge0.in(Bat0) == 0);
-//    Constraint Pb0("Pb0");
+//    Constraint<> Pb0("Pb0");
 //    Pb0 = Pb_;
 //    ODO->add(Pb0.in(Bat0) == 0);
-//
+
     /*  EFFICIENCIES */
     Constraint<> DieselEff("DieselEff");
     DieselEff += Pg - gen_eff.in(Gt)*Pg_;
-//    DieselEff += Pg - 0.8*Pg_;
     ODO->add(DieselEff.in(Gt) == 0);
 
+    auto exist_batt_eff = indices(exist_Bt,_eff_pieces);
+    auto pot_batt_eff = indices(pot_Bt,_eff_pieces);
     Constraint<> EfficiencyExist("BatteryEfficiencyExisting");
-    EfficiencyExist += Pb.in(indices(_eff_pieces,exist_Bt))  - eff_a.in(indices(_eff_pieces,exist_Bt))*Pb_.in(indices(_eff_pieces,exist_Bt)) - eff_b.in(indices(_eff_pieces,exist_Bt));
-    ODO->add(EfficiencyExist.in(indices(_eff_pieces,exist_Bt)) <= 0);
+    EfficiencyExist += Pb.in(exist_batt_eff)  - eff_a.in(exist_batt_eff)*Pb_.in(exist_batt_eff) - eff_b.in(exist_batt_eff);
+    ODO->add(EfficiencyExist.in(exist_batt_eff) <= 0);
 
     Constraint<> EfficiencyPot("BatteryEfficiencyPotential");
-    EfficiencyPot += Pb.in(indices(_eff_pieces,pot_Bt))  - eff_a.in(indices(_eff_pieces,pot_Bt))*Pb_.in(indices(_eff_pieces,pot_Bt)) - eff_b.in(indices(_eff_pieces,pot_Bt))*w_b.in(indices(_eff_pieces,pot_Bt));
-    ODO->add(EfficiencyPot.in(indices(_eff_pieces,pot_Bt)) <= 0);
+    EfficiencyPot += Pb.in(pot_batt_eff)  - eff_a.in(pot_batt_eff)*Pb_.in(pot_batt_eff) - eff_b.in(pot_batt_eff)*w_b.in(pot_batt_eff);
+    ODO->add(EfficiencyPot.in(pot_batt_eff) <= 0);
 //
 //
 //    for (auto n:nodes) {
