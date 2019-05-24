@@ -90,7 +90,8 @@ public:
     size_t _max_it = 10000;
     size_t _max_time = 3600;
     double  _tol = 1e-6;
-    size_t _nb_years = 5;
+    unsigned _nb_years = 5;
+    unsigned _nb_hours = 24;
     double _inflation_rate = 0.02, _demand_growth = 0.02;
     double _pv_cap_cost = 2500, _wind_cap_cost = 2500, _pv_eff = 0.8, _wind_eff = 0.8;
     bool add_3d_nlin = true;
@@ -101,6 +102,7 @@ public:
     double m_theta_lb = 0, m_theta_ub = 0; /**< BigM values for phase angles */
     double vmin = 0, vmax = 0; /**< Global values for voltage bounds */
     size_t nb_nodes = 0, nb_branches = 0, nb_gens = 0;
+    set<int> _microgrid_ids;
     param<> cb_f, cb_v;/**< Battery fixed nd variable costs */
     param<> inverter_capcost, gen_capcost, expansion_capcost, pv_capcost, pv_varcost;/**< Inverter, Generators, Expansion and PV capital costs */
     
@@ -197,19 +199,21 @@ public:
     /** Indices Sets */
     indices hours = indices("hours"); /**< Hours */
     //    indices months = time("jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"); /**< Months */
-    indices months = time("apr", "aug", "dec"); /**< Months */
+    indices months = time("summer"); /**< Months */
+    
+
 //    months._name = "months";
     //    indices months = time("jan");
     indices typical_days = time("week","peak","weekend");
 //    typical_days._name = "typical_days";
     //    indices typical_days = time("week");
-    indices phase_T, T= indices("Time"), Nt = indices("Nt"), Nt_load, Nt_no_load, Et = indices("Et"), Et1 = indices("Et1"), Et2 = indices("Et2"), Et3 = indices("Et3"), pot_G_ph = indices("pot_Gph"), pot_E_ph = indices("pot_Eph"), pot_B_ph = indices("pot_Bph"), G_ph= indices("Gph"), N_ph= indices("Nph"), exist_G_ph = indices("Exist_Gph"), exist_B_ph = indices("Exist_Bph"), B_ph = indices("Bph"), exist_E_ph = indices("Exist_Eph"), E_ph = indices("Eph"), E_ph1 = indices("Eph1"),E_ph2 = indices("Eph2"), E_ph3 = indices("Eph3"), Gt = indices("Gt"), exist_Gt, exist_Bt, exist_Et, pot_Et, pot_Gt, pot_Bt, Bt = indices("Bt"), Btn = indices("Btn"), Bt1 = indices("Bt1"), Gt1, Wt, PVt, PV_pot_t, pot_gen, pot_batt, pot_edges, pot_pv;
+    indices phase_T, T= indices("Time"), Nt = indices("Nt"), Nt_load, Nt_no_load, Et = indices("Et"), Et1 = indices("Et1"), Et2 = indices("Et2"), Et3 = indices("Et3"), pot_G_ph = indices("pot_Gph"), pot_Wind_ph = indices("pot_Wind_ph"), pot_PV_ph = indices("pot_PVph"), pot_E_ph = indices("pot_Eph"), pot_B_ph = indices("pot_Bph"), G_ph= indices("Gph"),Wind_ph= indices("Wph"),PV_ph= indices("PVph"), N_ph= indices("Nph"), exist_G_ph = indices("Exist_Gph"),exist_PV_ph = indices("Exist_PVph"),exist_Wind_ph = indices("Exist_Wind_ph"), exist_B_ph = indices("Exist_Bph"), B_ph = indices("Bph"), exist_E_ph = indices("Exist_Eph"), E_ph = indices("Eph"), E_ph1 = indices("Eph1"),E_ph2 = indices("Eph2"), E_ph3 = indices("Eph3"), Gt = indices("Gt"), PVt = indices("PVt"), Windt = indices("Windt"), exist_Gt= indices("exit_Gt"), exist_PVt= indices("exit_PVt"), exist_Windt= indices("exit_Windt"), exist_Bt= indices("exit_Bt"), exist_Et= indices("exit_Et"), pot_Et= indices("pot_Et"), pot_PVt= indices("pot_PVt"),pot_Windt= indices("pot_Windt"), pot_Gt= indices("pot_Gt"), pot_Bt= indices("pot_Bt"), Bt = indices("Bt"), Btn = indices("Btn"), Bt1 = indices("Bt1"), Gt1, Wt, PV_pot_t, pot_gen, pot_batt, pot_edges, pot_pv;
     indices Et_opt, Gt_opt, Bt_opt, Bt1_opt, Wt_opt, PVt_opt;
     indices cross_phase = indices("cross_phase");
     indices N_ph1 = indices("Nph1"),N_ph2 = indices("Nph2"), N_ph3 = indices("Nph3");
     
     /** Investment Binary Variables */
-    var<int> w_g, w_b, w_e, w_pv;
+    var<int> w_g, w_b, w_e, w_pv, w_wind;
     var<> Pv_cap; /**< Real variable indicating the extra capacity of PV to be installed */
     param<> Pv_cap_; /**< Real variable indicating the extra capacity of PV that has been installed */
     var<> Pg_; /**< Real variable indicating the power generation levels on committed generators */
@@ -251,6 +255,9 @@ public:
     /** Power grid data parser from DERCAM*/
     int readDERCAM(const string& fname);
     
+    
+    PowerNet* clone(int net_id) const; /**< clone the subnetwork correpsonding to net_id */
+        
     /** Accessors */
     string get_ref_bus();
     unsigned get_nb_active_gens() const;
@@ -276,7 +283,7 @@ public:
     
     void fix_investment();
     
-    shared_ptr<Model<>> build_ODO_model(PowerModelType model=LDISTF, int output=5, double tol=1e-6, int nb_hours = 24);
+    shared_ptr<Model<>> build_ODO_model(PowerModelType model=LDISTF, int output=5, double tol=1e-6, int nb_hours = 24, bool networked=false);
     
     unique_ptr<Model<>> build_ACOPF_N_1(PowerModelType Model=ACPOL, int output=0, double tol=1e-6);
     
@@ -301,6 +308,9 @@ public:
     indices get_branch_id_phase(unsigned ph) const;
     
     indices gens_per_node_time() const;
+    indices PV_per_node_time() const;
+    indices Batt_per_node_time() const;
+    indices Wind_per_node_time() const;
     indices out_arcs_per_node_time() const;
     indices in_arcs_per_node_time() const;
     
@@ -317,6 +327,8 @@ public:
     shared_ptr<Model<>> build_SCOPF_line_contingency(int cont, const string& name, PowerModelType Model=ACPOL, int output=5, double tol=1e-6);
     
     void fill_wbnds();
+    
+    vector<shared_ptr<PowerNet>> get_separate_microgrids() const;
 };
 
 shared_ptr<Model<>> build_ACOPF(PowerNet& grid, PowerModelType Model=ACPOL, int output=0, double tol=1e-6);

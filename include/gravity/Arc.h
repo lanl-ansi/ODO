@@ -17,13 +17,14 @@
 
 class Arc{
 public:
-    int _id;
+    int _id = -1;
     std::string _name;
     std::string _type_name="Arc";
     Node* _src;
     Node* _dest;
     double _weight;
     double _len = 0;
+    bool _tie_line = false; /**< is this arc connecting to different networks */
     bool _is_transformer = false;
     bool _active = true;
     bool _expansion = false;

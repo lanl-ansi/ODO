@@ -1528,10 +1528,12 @@ namespace gravity {
 //                    is_suffix = true;
 //                }
 //            }
-            int sep_pos = -1;
+            int sep_pos[ids._keys->size()];
             bool found = false;
-            if(nb_sep2>nb_sep1){//Key_ids has more indices
+            size_t i = 0;
+            if(nb_sep2>nb_sep1 && _indices->_type != to_ && _indices->_type != from_){//Key_ids has more indices
                 for(auto key: *ids._keys){
+                    found = false;
                     if(ids._excluded_keys.count(idx++)!=0){
                         continue;
                     }
@@ -1539,15 +1541,11 @@ namespace gravity {
                         auto new_pos = key.find(key_param);
                         if(new_pos!=string::npos){
                             found = true;
-                            if(sep_pos==-1){
-                                sep_pos=new_pos;
-                            }
-                            else if(sep_pos!=new_pos){
-                                throw invalid_argument("In function param.in(const vector<Tobj>& vec), vec has indexing issues: "+key);
-                            }
+                            sep_pos[i]=new_pos;
                             break;
                         }
                     }
+                    i++;
                     if(!found){
                         throw invalid_argument("In function param.in(const vector<Tobj>& vec), vec has unknown key: "+key);
                     }
@@ -1561,7 +1559,8 @@ namespace gravity {
 //                        break;
 //                    }
 //                }
-//            }            
+//            }
+            i = 0;
             for(auto key: *ids._keys){
                 if(ids._excluded_keys.count(idx++)!=0){
                     excluded += key + ",";
@@ -1585,7 +1584,7 @@ namespace gravity {
                 else {
                     /* Compare indexing and truncate extra indices */
                     if(nb_sep2>nb_sep1){
-                        key = key.substr(sep_pos);
+                        key = key.substr(sep_pos[i++]);
                         pos = nthOccurrence(key, ",", nb_sep1+1);
                         key = key.substr(0,pos);
                     }

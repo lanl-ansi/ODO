@@ -151,6 +151,7 @@ int main (int argc, char * argv[])
         cerr << "Error reading Excel File, Exiting" << endl;
         return -1;
     }
+//    auto grids = grid.get_separate_microgrids();
     
     /* Grid Parameters */
     auto bus_pairs = grid.get_bus_pairs();
@@ -200,8 +201,25 @@ int main (int argc, char * argv[])
     else {
         solver<> ACUC(ODO,ipopt);
         return_status = ACUC.run(output=5, tol = 1e-5);
+        ODO->print_solution();
         auto pg = ODO->get_var<double>("Pg");
         pg.print_vals(10);
+        auto pg_ = ODO->get_var<double>("Pg_");
+        pg_.print_vals(10);
+        auto pw = ODO->get_var<double>("Pw");
+        pw.print_vals(10);
+        auto pv = ODO->get_var<double>("Pv");
+        pv.print_vals(10);
+        auto pb = ODO->get_var<double>("Pb");
+        pb.print_vals(10);
+        auto wb = ODO->get_var<double>("w_b");
+        wb.print_vals(10);
+        auto wpv = ODO->get_var<double>("w_pv");
+        wpv.print_vals(10);
+        auto we = ODO->get_var<double>("w_e");
+        we.print_vals(10);
+        auto wg = ODO->get_var<double>("w_g");
+        wg.print_vals(10);
         solver_time_end = get_wall_time();
         solve_time = solver_time_end - solver_time_start;
         DebugOn("Solve time = " << solve_time << endl);

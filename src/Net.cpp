@@ -50,7 +50,7 @@ bool Net::duplicate(std::string n1, std::string n2, int id1) {
 }
 
 
-Net* Net::clone() {
+Net* Net::clone() const{
     Net* copy_net = new Net();
     Node* node = NULL;
     

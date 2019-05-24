@@ -29,6 +29,7 @@ Arc::Arc(Node* s, Node* d) {
     _dest = d;
     _weight = 1;
     _name = s->_name + "," + d->_name;
+    _tie_line = s->_net_id!=d->_net_id;
 //   in_cycle = false;
     //  parallel = false;
     //  connect();
@@ -38,6 +39,7 @@ Arc::Arc(Node*s, Node* d, double w) {
     _src = s;
     _dest = d;
     _weight = w;
+    _tie_line = s->_net_id!=d->_net_id;
 }
 
 Arc* Arc::clone() {
@@ -46,6 +48,7 @@ Arc* Arc::clone() {
     copy->_dest = _dest;
     copy->_weight = _weight;
     copy->_id = _id;
+    copy->_tie_line = _tie_line;
     return copy;
 }
 

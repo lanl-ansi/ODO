@@ -461,7 +461,7 @@ indices PowerNet::get_branch_id_phase(unsigned ph) const{
         key = phi+","+phi+","+arc->_name;
         auto it1 = ids._keys_map->find(key);
         if (it1 == ids._keys_map->end()){
-            throw invalid_argument("In function get_branch_phase(), unknown key.");
+            throw invalid_argument("In function get_branch_phase(), unknown key: " + key);
         }
         ids._ids->at(0).push_back(it1->second);
     }
@@ -517,7 +517,107 @@ indices PowerNet::get_branch_phase(unsigned ph) const{
     return ids;
 }
 
+indices PowerNet::Batt_per_node_time() const{
+    auto ids = Bt;
+    ids._name = "batt_per_node_time";
+    ids._ids = make_shared<vector<vector<size_t>>>();
+    ids._ids->resize(Nt.size());
+    string key, time_stamp;
+    size_t inst = 0;
+    for (auto key: *Nt._keys) {
+        auto pos = key.find_last_of(",");
+        auto name = key.substr(pos+1);
+        key = key.substr(0,pos);
+        pos = key.find_last_of(",");
+        auto ph = key.substr(pos+1);
+        key = key.substr(0,pos);
+        auto n = get_node(name);
+        if (!n->_active) {
+            continue;
+        }
+        for (auto g:((Bus*)n)->_bat) {
+            if (!g->_active || !g->has_phase(ph)) {
+                continue;
+            }
+            auto gname = key+","+ph+","+g->_name;
+            auto it1 = ids._keys_map->find(gname);
+            if (it1 == ids._keys_map->end()){
+                throw invalid_argument("In function batt_per_node_time(), unknown key: " + gname);
+            }
+            ids._ids->at(inst).push_back(it1->second);
+        }
+        inst++;
+    }
+    return ids;
+}
 
+indices PowerNet::PV_per_node_time() const{
+    auto ids = PVt;
+    ids._name = "PV_per_node_time";
+    ids._ids = make_shared<vector<vector<size_t>>>();
+    ids._ids->resize(Nt.size());
+    string key, time_stamp;
+    size_t inst = 0;
+    for (auto key: *Nt._keys) {
+        auto pos = key.find_last_of(",");
+        auto name = key.substr(pos+1);
+        key = key.substr(0,pos);
+        pos = key.find_last_of(",");
+        auto ph = key.substr(pos+1);
+        key = key.substr(0,pos);
+        auto n = get_node(name);
+        if (!n->_active) {
+            continue;
+        }
+        for (auto g:((Bus*)n)->_pv) {
+            if (!g->_active || !g->has_phase(ph)) {
+                continue;
+            }
+            auto gname = key+","+ph+","+g->_name;
+            auto it1 = ids._keys_map->find(gname);
+            if (it1 == ids._keys_map->end()){
+                throw invalid_argument("In function pv_per_node_time(), unknown key: " + gname);
+            }
+            ids._ids->at(inst).push_back(it1->second);
+        }
+        inst++;
+    }
+    return ids;
+}
+
+indices PowerNet::Wind_per_node_time() const{
+    auto ids = Wt;
+    ids._name = "Wind_per_node_time";
+    ids._ids = make_shared<vector<vector<size_t>>>();
+    ids._ids->resize(Nt.size());
+    string key, time_stamp;
+    size_t inst = 0;
+    for (auto key: *Nt._keys) {
+        auto pos = key.find_last_of(",");
+        auto name = key.substr(pos+1);
+        key = key.substr(0,pos);
+        pos = key.find_last_of(",");
+        auto ph = key.substr(pos+1);
+        key = key.substr(0,pos);
+        auto n = get_node(name);
+        if (!n->_active) {
+            continue;
+        }
+        for (auto g:((Bus*)n)->_wind) {
+            if (!g->_active || !g->has_phase(ph)) {
+                continue;
+            }
+            auto gname = key+","+ph+","+g->_name;
+            auto it1 = ids._keys_map->find(gname);
+            if (it1 == ids._keys_map->end()){
+                throw invalid_argument("In function wind_per_node_time(), unknown key: " + gname);
+            }
+            ids._ids->at(inst).push_back(it1->second);
+        }
+        inst++;
+    }
+    return ids;
+}
 
 
 indices PowerNet::gens_per_node_time() const{
@@ -716,14 +816,16 @@ int PowerNet::readODO(const string& fname){
     clog << "Processing CableParams for branch expansion costs and line properties" << std::endl;
     auto row_it = ws.rows().begin();
     row_it++;//SKIP FRIST ROW
-    vector<pair<double,double>> rx; /* Vector of resistance,reactance */
+    vector<string> r; /* Matrix of resistance */
+    vector<string> x; /* Matrix of reactance */
     vector<double> cost; /* Vector of expansion costs */
     vector<double> Smax; /* Vector of thermal limits */
     vector<string> phase_list;
     while (row_it!=ws.rows().end()) {
         auto row = *row_it++;
-        rx.push_back(make_pair(row[2].value<double>(), row[3].value<double>()));
         cost.push_back(row[2].value<double>());
+        r.push_back(row[3].to_string());
+        x.push_back(row[4].to_string());
         Smax.push_back(row[5].value<double>()/bMVA);
         phase_list.push_back(row[6].to_string());
     }
@@ -760,8 +862,6 @@ int PowerNet::readODO(const string& fname){
                         arc->_expansion = true;
                         arc->_active = true;
                         arc->b_type = b_id;
-                        arc->r = rx[b_id-1].first;
-                        arc->x = rx[b_id-1].second;
                         arc->smax = Smax[b_id-1];
                         arc->cost = cost[b_id-1];
                         arc->set_phases(phase_list[b_id-1]);
@@ -770,22 +870,56 @@ int PowerNet::readODO(const string& fname){
                         arc->_dest= get_node(dest);
                         arc->connect();
                         add_arc(arc);
+                        expansion_capcost.add_val(arc->_name, arc->cost);
                         _potential_expansion.push_back(arc);
+                        auto r_str = r[b_id-1];
+                        auto x_str = x[b_id-1];
+                        auto ymat = arma::cx_mat(3,3);
                         for (auto i = 0; i<3; i++) {
                             if(arc->_phases.count(i+1)!=0 && arc->_src->_phases.count(i+1)!=0 && arc->_dest->_phases.count(i+1)!=0){
                                 auto ph_key = "ph"+to_string(i+1)+","+arc->_name;
-                                E_ph.add(ph_key);
-                                pot_E_ph.add(ph_key);
+                                E_ph.insert(ph_key);
+                                pot_E_ph.insert(ph_key);
                                 this->S_max.add_val(ph_key, arc->smax);
                                 if(i==0){
-                                    E_ph1.add(ph_key);
+                                    E_ph1.insert(ph_key);
                                 }
                                 else if(i==1){
-                                    E_ph2.add(ph_key);
+                                    E_ph2.insert(ph_key);
                                 }
                                 else {
-                                    E_ph3.add(ph_key);
+                                    E_ph3.insert(ph_key);
                                 }
+                                for (auto j= 0; j<3; j++) {
+                                    if(arc->_phases.count(i+1)!=0 && arc->_src->_phases.count(i+1)!=0 && arc->_dest->_phases.count(i+1)!=0){
+                                        auto key = "ph"+to_string(i+1)+",ph"+to_string(j+1)+","+arc->_name;
+                                        r_str = r_str.substr(0,r_str.find_first_of(","));
+                                        x_str = x_str.substr(0,x_str.find_first_of(","));
+                                        br_r_.add_val(key, stod(r_str));
+                                        br_x_.add_val(key, stod(x_str));
+                                        ymat(i,j) = complex<double>(br_r_.eval(),br_x_.eval());
+//                                            b.add_val(key, ymat_inv(i,j).imag());
+                                    }
+                                }
+                                b_fr_.add_val(ph_key, 0);
+                                b_to_.add_val(ph_key, 0);
+                                g_fr_.add_val(ph_key, 0);
+                                g_to_.add_val(ph_key, 0);
+                                shift_.add_val(ph_key, 0);
+                                tap_.add_val(ph_key, 1);
+                            }
+                        }
+                        arma::cx_mat ymat_inv = arma::pinv(ymat);
+                        for (auto i= 0; i<3; i++) {
+                            if(arc->_phases.count(i+1)==0)
+                                continue;
+                            for (auto j= 0; j<3; j++) {
+                                if(arc->_phases.count(j+1)==0)
+                                    continue;
+                                auto key = "ph"+to_string(i+1)+",ph"+to_string(j+1)+","+arc->_name;
+                                cross_phase.insert(key);
+                                g.add_val(key, ymat_inv(i,j).real());
+                                b.add_val(key, ymat_inv(i,j).imag());
                             }
                         }
                         if (list.size()<= sz) {
@@ -899,10 +1033,13 @@ int PowerNet::readODO(const string& fname){
         clog << "Processing PvWindInvest (Pv and Wind investment options at each node)" << std::endl;
         row_it = ws.rows().begin();
         row_it++;
-        row_it++;//SKIP FIRST ROW
+        row_it++;//SKIP SECOND ROW
+        vector<string> pv_phase_list;
         auto row = *row_it;
-        for (auto n: nodes) {
-            auto bus = (Bus*)n;
+        for (auto i = 0; i<nodes.size(); i++) {
+            auto bname = row[0].to_string();
+            bname = bname.substr(4);//remove the node string
+            auto bus = (Bus*)get_node(bname);
             min_PV = row[1].value<double>();
             max_PV = row[2].value<double>();
             exist = row[3].value<double>();
@@ -910,29 +1047,82 @@ int PowerNet::readODO(const string& fname){
             bus->_max_PV_cap = max_PV;
             bus->_existing_PV_cap = exist;
             if (max_PV>0 || exist >0) {
-                DebugOn("min PV cap at bus" << bus->_name << " = " << min_PV << endl);
-                DebugOn("max PV cap at bus" << bus->_name << " = " << max_PV << endl);
-                DebugOn("existing PV cap at bus" << bus->_name << " = " << exist << endl);
+                pv_phase_list.push_back(row[5].to_string());
+                if(exist>0){
+                    auto name = "exist,"+bus->_name;
+                    bus->_pv.push_back(new PV(name,min_PV,max_PV));
+                    bus->_pv.back()->set_phases(pv_phase_list.back());
+                    DebugOn("existing PV cap at bus" << bus->_name << " = " << exist << endl);
+                    DebugOn("On phases: " << pv_phase_list.back() << endl);
+                    for (int ph = 1; ph<=3; ph++) {
+                        if(bus->_phases.count(ph)==0 || bus->_pv.back()->_phases.count(ph)==0){
+                            continue;
+                        }
+                        exist_PV_ph.insert("ph"+to_string(ph)+","+name);
+                        PV_ph.insert("ph"+to_string(ph)+","+name);
+                    }
+                }
+                if(max_PV-exist>0){
+                    auto name = "potential,"+bus->_name;
+                    bus->_pv.push_back(new PV(name,min_PV,max_PV));
+                    bus->_pv.back()->set_phases(pv_phase_list.back());
+                    DebugOn("min PV cap at bus" << bus->_name << " = " << min_PV << endl);
+                    DebugOn("max PV cap at bus" << bus->_name << " = " << max_PV << endl);
+                    DebugOn("Potential PV cap at bus" << bus->_name << " = " << max_PV-exist << endl);
+                    DebugOn("On phases: " << pv_phase_list.back() << endl);
+                    for (int ph = 1; ph<=3; ph++) {
+                        if(bus->_phases.count(ph)==0 || bus->_pv.back()->_phases.count(ph)==0){
+                            continue;
+                        }
+                        pot_PV_ph.insert("ph"+to_string(ph)+","+name);
+                        PV_ph.insert("ph"+to_string(ph)+","+name);
+                    }
+                }
             }
             row_it++;
             row = *row_it;
         }
         assert(row[0].value<string>()=="Wind");
         row_it++;
-        row_it++;//SKIP FIRST ROW
+        row_it++;//SKIP SECOND ROW
         row = *row_it;
-        for (auto n: nodes) {
-            auto bus = (Bus*)n;
+        for (auto i = 0; i<nodes.size(); i++) {
+            auto bname = row[0].to_string();
+            bname = bname.substr(4);//remove the node string
+            auto bus = (Bus*)get_node(bname);
             min_Wind = row[1].value<double>();
             max_Wind = row[2].value<double>();
             exist = row[3].value<double>();
             bus->_min_Wind_cap = min_Wind;
             bus->_max_Wind_cap = max_Wind;
             bus->_existing_Wind_cap = exist;
-            if(max_Wind>0 || exist >0){
+            if(exist>0){
+                auto name = "exist,"+bus->_name;
+                bus->_wind.push_back(new WindGen(name,min_Wind,max_Wind));
                 DebugOn("min Wind cap at bus" << bus->_name << " = " << min_Wind << endl);
                 DebugOn("max Wind cap at bus" << bus->_name << " = " << max_Wind << endl);
                 DebugOn("existing Wind cap at bus" << bus->_name << " = " << exist << endl);
+                for (int ph = 1; ph<=3; ph++) {
+                    if(bus->_phases.count(ph)==0){
+                        continue;
+                    }
+                    exist_Wind_ph.insert("ph"+to_string(ph)+","+name);
+                    Wind_ph.insert("ph"+to_string(ph)+","+name);
+                }
+            }
+            if(max_Wind-exist>0){
+                auto name = "potential,"+bus->_name;
+                bus->_wind.push_back(new WindGen(name,min_Wind,max_Wind));
+                DebugOn("min Wind cap at bus" << bus->_name << " = " << min_Wind << endl);
+                DebugOn("max Wind cap at bus" << bus->_name << " = " << max_Wind << endl);
+                DebugOn("potential Wind cap at bus" << bus->_name << " = " << max_Wind-exist << endl);
+                for (int ph = 1; ph<=3; ph++) {
+                    if(bus->_phases.count(ph)==0){
+                        continue;
+                    }
+                    pot_Wind_ph.insert("ph"+to_string(ph)+","+name);
+                    Wind_ph.insert("ph"+to_string(ph)+","+name);
+                }
             }
             row_it++;
             row = *row_it;
@@ -1037,10 +1227,10 @@ int PowerNet::readODO(const string& fname){
             unsigned index = 0;
             while (row[0].to_string().compare((*row_it)[0].to_string())==0) {
                 max_d = row[6].value<int>();
-                if (max_d>0) {
+                exist = row[7].value<int>();
+                if (max_d>0 || exist>0) {
                     min_d = row[5].value<int>();
-                    exist = row[7].value<int>();
-                    assert(max_d>=min_d && max_d>=exist);
+                    assert(max_d>=min_d);
                     age = row[8].value<int>();
                     bus->_diesel_data[index] = DieselData(min_d,max_d,exist,age);
                     auto copy = _all_diesel_gens[index];
@@ -1069,7 +1259,7 @@ int PowerNet::readODO(const string& fname){
                                 continue;
                             }
                             G_ph.insert("ph"+to_string(ph)+","+name);
-                            exist_G_ph.add("ph"+to_string(ph)+","+name);
+                            exist_G_ph.insert("ph"+to_string(ph)+","+name);
                         }
                     }
                     for (auto i = exist; i<exist+max_d; i++) {
@@ -1179,10 +1369,10 @@ int PowerNet::readODO(const string& fname){
                         _existing_battery_inverters.push_back(copy);
                         _battery_inverters.push_back(copy);
                         bus->_bat.push_back(copy);
-                        this->pb_min.add_val(copy->_name, -copy->_max_s);
-                        this->pb_max.add_val(copy->_name, copy->_max_s);
-                        this->qb_min.add_val(copy->_name, -copy->_max_s);
-                        this->qb_max.add_val(copy->_name, copy->_max_s);
+                        this->pb_min.add_val(copy->_name, -copy->_max_s/bMVA);
+                        this->pb_max.add_val(copy->_name, copy->_max_s/bMVA);
+                        this->qb_min.add_val(copy->_name, -copy->_max_s/bMVA);
+                        this->qb_max.add_val(copy->_name, copy->_max_s/bMVA);
                         auto nb_eff_pieces = copy->_x_eff.size() - 1;
                         if(_nb_eff_pieces<nb_eff_pieces){
                             _nb_eff_pieces = nb_eff_pieces;
@@ -1219,10 +1409,10 @@ int PowerNet::readODO(const string& fname){
                         this->min_batt_invest.add_val(copy->_name, min_bat);
                         this->max_batt_invest.add_val(copy->_name, max_bat);
                         this->inverter_capcost.add_val(copy->_name,copy->_capcost);
-                        this->pb_min.add_val(copy->_name, -copy->_max_s);
-                        this->pb_max.add_val(copy->_name, copy->_max_s);
-                        this->qb_min.add_val(copy->_name, -copy->_max_s);
-                        this->qb_max.add_val(copy->_name, copy->_max_s);
+                        this->pb_min.add_val(copy->_name, -copy->_max_s/bMVA);
+                        this->pb_max.add_val(copy->_name, copy->_max_s/bMVA);
+                        this->qb_min.add_val(copy->_name, -copy->_max_s/bMVA);
+                        this->qb_max.add_val(copy->_name, copy->_max_s/bMVA);
                         auto nb_eff_pieces = copy->_x_eff.size() - 1;
                         if(_nb_eff_pieces<nb_eff_pieces){
                             _nb_eff_pieces = nb_eff_pieces;
@@ -1254,7 +1444,7 @@ int PowerNet::readODO(const string& fname){
             bus->print();
         }
         for (auto i = 1; i<=_nb_eff_pieces; i++) {
-            _eff_pieces.add("eff"+to_string(i));
+            _eff_pieces.insert("eff"+to_string(i));
         }
     }
     indices months = time("jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"); /**< Months */
@@ -1381,7 +1571,7 @@ int PowerNet::readODO(const string& fname){
         for (unsigned m = 0; m<12; m++) {
             auto row = *row_it++;
             for (unsigned t=0; t<24; t++) {
-                _months_data[m]._wind_average[t] = row[t+1].value<double>()/bMVA;
+                _months_data[m]._wind_average[t] = 0.0006*0.42*row[t+1].value<double>()/bMVA;
             }
         }
     }
@@ -1400,14 +1590,14 @@ int PowerNet::readODO(const string& fname){
         for (unsigned m = 0; m<12; m++) {
             auto row = *row_it++;
             for (unsigned t=0; t<24; t++) {
-                _months_data[m]._wind_variance[t] = row[t+1].value<double>()/bMVA;
+                _months_data[m]._wind_variance[t] = 0.0006*0.42*row[t+1].value<double>()/bMVA;
             }
         }
     }
     else{
         for (unsigned m = 0; m<12; m++) {
             for (unsigned t=0; t<24; t++) {
-                _months_data[m]._wind_variance[t] = _months_data[m]._wind_average[t]/10.;
+                _months_data[m]._wind_variance[t] = 0.0006*0.42*_months_data[m]._wind_average[t]/10.;
             }
         }
     }
@@ -1420,83 +1610,81 @@ int PowerNet::readODO(const string& fname){
         auto potential_PV = b->_max_PV_cap;
         auto potential_wind = b->_max_Wind_cap;
         if (potential_PV>0) {
-            auto new_pv = new PV(b->_name, b->_min_PV_cap, potential_PV, _PV_data._lifetime, _PV_data._fixed_cost, _PV_data._var_cost);
+            auto new_pv = b->_pv.back();
             auto name = new_pv->_name;
-            b->_pv.push_back(new_pv);
-            b->_pot_pv.push_back(new_pv);
-            _all_PV_gens.push_back(new_pv);
-            _potential_PV_gens.push_back(new_pv);
             this->pv_max.add_val(name, potential_PV/bMVA);
             this->pv_min.add_val(name, 0);
-            this->pv_capcost.add_val(name,new_pv->_capcost);
-            this->pv_varcost.add_val(name,new_pv->_varcost*bMVA);
-            
-            for (unsigned m = 0; m<months.size(); m++) {
-                for (unsigned t=0; t<24; t++) {
-                    auto key = name + "," + months._keys->at(m) + ",week," + to_string(t+1) ;
-                    pv_out.add_val(key, _months_data[m]._solar_average[t]);
-                    key = name + "," + months._keys->at(m) + ",peak," + to_string(t+1) ;
-                    pv_out.add_val(key, _months_data[m]._solar_average[t]);
-                    key = name + "," + months._keys->at(m) + ",weekend," + to_string(t+1) ;
-                    pv_out.add_val(key, _months_data[m]._solar_average[t]);
+            this->pv_capcost.add_val(name,_pv_cap_cost);
+            this->pv_varcost.add_val(name,_pv_cap_cost/bMVA);
+            for (unsigned y = 0; y<_nb_years; y++) {
+                for (unsigned m = 0; m<this->months.size(); m++) {
+                    for (unsigned t=0; t<_nb_hours; t++) {
+                        for (auto &ph: new_pv->_phases){
+                            auto key = "year" + to_string(y+1) + "," + this->months._keys->at(m) + ",week," + to_string(t+1) + ",ph" + to_string(ph) + "," + name;
+                            pv_out.add_val(key, _months_data[m]._solar_average[t]);
+                            key = "year" + to_string(y+1) + "," + this->months._keys->at(m) + ",peak," + to_string(t+1) + ",ph" + to_string(ph) + "," + name;
+                            pv_out.add_val(key, _months_data[m]._solar_average[t] + _months_data[m]._solar_variance[t]);
+                            key = "year" + to_string(y+1) + "," + this->months._keys->at(m) + ",weekend," + to_string(t+1) + ",ph" + to_string(ph) + "," + name;
+                            pv_out.add_val(key, _months_data[m]._solar_average[t]);
+                        }
+                            
+                    }
                 }
             }
         }
         if (b->_existing_PV_cap > 0) {
-            auto new_pv = new PV(b->_name+"_exist", b->_existing_PV_cap, b->_existing_PV_cap, _PV_data._lifetime, _PV_data._fixed_cost, _PV_data._var_cost);
-            b->_pv.push_back(new_pv);
+            auto new_pv = b->_pv.front();
             auto name = new_pv->_name;
-            _existing_PV_gens.push_back(new_pv);
-            _all_PV_gens.push_back(new_pv);
             this->pv_max.add_val(name, b->_existing_PV_cap/bMVA);
             this->pv_min.add_val(name, 0);
-            for (unsigned m = 0; m<months.size(); m++) {
-                for (unsigned t=0; t<24; t++) {
-                    auto key = name + "," + months._keys->at(m) + ",week," + to_string(t+1) ;
-                    pv_out.add_val(key, _months_data[m]._solar_average[t]);
-                    key = name + "," + months._keys->at(m) + ",peak," + to_string(t+1) ;
-                    pv_out.add_val(key, _months_data[m]._solar_average[t]);
-                    key = name + "," + months._keys->at(m) + ",weekend," + to_string(t+1) ;
-                    pv_out.add_val(key, _months_data[m]._solar_average[t]);
+            for (unsigned y = 0; y<_nb_years; y++) {
+                for (unsigned m = 0; m<this->months.size(); m++) {
+                    for (unsigned t=0; t<_nb_hours; t++) {
+                        for (auto &ph: new_pv->_phases){
+                            auto key = "year" + to_string(y+1) + "," + this->months._keys->at(m) + ",week," + to_string(t+1) + ",ph" + to_string(ph) + "," + name;
+                            pv_out.add_val(key, _months_data[m]._solar_average[t]);
+                            key = "year" + to_string(y+1) + "," + this->months._keys->at(m) + ",peak," + to_string(t+1) + ",ph" + to_string(ph) + "," + name;
+                            pv_out.add_val(key, _months_data[m]._solar_average[t] + _months_data[m]._solar_variance[t]);
+                            key = "year" + to_string(y+1) + "," + this->months._keys->at(m) + ",weekend," + to_string(t+1) + ",ph" + to_string(ph) + "," + name;
+                            pv_out.add_val(key, _months_data[m]._solar_average[t]);
+                        }
+                    }
                 }
             }
         }
         if (potential_wind>0) {
-            auto wg = new WindGen(b->_name, _wind_data._cap, _wind_data._lifetime, _wind_data._cap_cost);
-            b->_wind.push_back(wg);
-            b->_pot_wind.push_back(wg);
-            _all_wind_gens.push_back(wg);
-            _potential_wind_gens.push_back(wg);
-            for (unsigned m = 0; m<months.size(); m++) {
-                for (unsigned t=0; t<24; t++) {
-                    auto key = name + "," + months._keys->at(m) + ",week," + to_string(t+1) ;
-                    pw_max.add_val(key, _months_data[m]._wind_average[t]);
-                    pw_min.add_val(key, 0);
-                    key = name + "," + months._keys->at(m) + ",peak," + to_string(t+1) ;
-                    pw_max.add_val(key, _months_data[m]._wind_average[t]);
-                    pw_min.add_val(key, 0);
-                    key = name + "," + months._keys->at(m) + ",weekend," + to_string(t+1) ;
-                    pw_max.add_val(key, _months_data[m]._wind_average[t]);
-                    pw_min.add_val(key, 0);
+            auto new_wind = b->_wind.back();
+            auto name = new_wind->_name;
+            for (unsigned y = 0; y<_nb_years; y++) {
+                for (unsigned m = 0; m<this->months.size(); m++) {
+                    for (unsigned t=0; t<_nb_hours; t++) {
+                        for (auto &ph: {1,2,3}){
+                            auto key = "year" + to_string(y+1) + "," + this->months._keys->at(m) + ",week," + to_string(t+1) + ",ph" + to_string(ph) + "," + name;
+                            pw_max.add_val(key, _months_data[m]._wind_average[t]);
+                            key = "year" + to_string(y+1) + "," + this->months._keys->at(m) + ",peak," + to_string(t+1) + ",ph" + to_string(ph) + "," + name;
+                            pw_max.add_val(key, _months_data[m]._wind_average[t] +  _months_data[m]._wind_variance[t]);
+                            key = "year" + to_string(y+1) + "," + this->months._keys->at(m) + ",weekend," + to_string(t+1) + ",ph" + to_string(ph) + "," + name;
+                            pw_max.add_val(key, _months_data[m]._wind_average[t] +  _months_data[m]._wind_variance[t]);
+                        }
+                    }
                 }
             }
         }
         if (b->_existing_Wind_cap>0) {
-            auto wg = new WindGen(b->_name+"_exist", _wind_data._cap, _wind_data._lifetime, _wind_data._cap_cost);
-            b->_wind.push_back(wg);
-            _all_wind_gens.push_back(wg);
-            _existing_wind_gens.push_back(wg);
-            for (unsigned m = 0; m<months.size(); m++) {
-                for (unsigned t=0; t<24; t++) {
-                    auto key = name + "," + months._keys->at(m) + ",week," + to_string(t+1) ;
-                    pw_max.add_val(key, _months_data[m]._wind_average[t]);
-                    pw_min.add_val(key, 0);
-                    key = name + "," + months._keys->at(m) + ",peak," + to_string(t+1) ;
-                    pw_max.add_val(key, _months_data[m]._wind_average[t]);
-                    pw_min.add_val(key, 0);
-                    key = name + "," + months._keys->at(m) + ",weekend," + to_string(t+1) ;
-                    pw_max.add_val(key, _months_data[m]._wind_average[t]);
-                    pw_min.add_val(key, 0);
+            auto new_wind = b->_wind.front();
+            auto name = new_wind->_name;
+            for (unsigned y = 0; y<_nb_years; y++) {
+                for (unsigned m = 0; m<this->months.size(); m++) {
+                    for (unsigned t=0; t<_nb_hours; t++) {
+                        for (auto &ph: {1,2,3}){
+                            auto key = "year" + to_string(y+1) + "," + this->months._keys->at(m) + ",week," + to_string(t+1) + ",ph" + to_string(ph) + "," + name;
+                            pw_max.add_val(key, _months_data[m]._wind_average[t]);
+                            key = "year" + to_string(y+1) + "," + this->months._keys->at(m) + ",peak," + to_string(t+1) + ",ph" + to_string(ph) + "," + name;
+                            pw_max.add_val(key, _months_data[m]._wind_average[t] +  _months_data[m]._wind_variance[t]);
+                            key = "year" + to_string(y+1) + "," + this->months._keys->at(m) + ",weekend," + to_string(t+1) + ",ph" + to_string(ph) + "," + name;
+                            pw_max.add_val(key, _months_data[m]._wind_average[t] +  _months_data[m]._wind_variance[t]);
+                        }
+                    }
                 }
             }
         }
@@ -1505,6 +1693,50 @@ int PowerNet::readODO(const string& fname){
     //    pl.print(true);
     clog << "Reading excel file complete" << std::endl;
     return 0;
+}
+
+
+PowerNet* PowerNet::clone(int net_id) const{
+    PowerNet* copy_net = new PowerNet();
+    Bus* node = NULL;
+    
+    for (int i=0; i<nodes.size(); i++) {
+        node = (Bus*)this->nodes[i];
+        if(node->_net_id==net_id){
+            copy_net->add_node(new Bus(*node));
+        }
+    }
+    
+    Line* arc = NULL;
+    for (int i=0; i < arcs.size(); i++) {
+        
+        arc = (Line*)arcs[i];
+        if(arc->_tie_line){
+            continue;
+        }
+        arc = new Line(*arc);
+        /* Update the source and destination to the new nodes in copy_net */
+        arc->_src = copy_net->get_node(arc->_src->_name);
+        arc->_dest = copy_net->get_node(arc->_dest->_name);
+        
+        /* Add the new arc to the list of arcs */
+        copy_net->add_arc(arc);
+        
+        /* Connects it to its source and destination */
+        arc->connect();
+    }
+    return copy_net;
+}
+
+
+vector<shared_ptr<PowerNet>> PowerNet::get_separate_microgrids() const{
+    
+    DebugOn("Number of Microgrids detected = " << _microgrid_ids.size() << endl);
+    vector<shared_ptr<PowerNet>> res;
+    for (auto net_id: _microgrid_ids) {
+        res.push_back(shared_ptr<PowerNet>(this->clone(net_id)));
+    }
+    return res;
 }
 
 void PowerNet::readJSON(const string& fname){
@@ -1531,6 +1763,7 @@ void PowerNet::readJSON(const string& fname){
         auto btype = list["bus_type"].GetInt();
         Debug("btype = " << btype << endl);
         auto index = list["index"].GetInt();
+        auto net_id = list["microgrid_id"].GetInt();
         auto name = string(list["name"].GetString());
         auto status =  list["status"].GetInt();
         auto va =  list["va"].GetArray();
@@ -1540,6 +1773,8 @@ void PowerNet::readJSON(const string& fname){
         auto bus = new Bus(to_string(index));
         bus->vbound.min = vmin[0].GetDouble();
         bus->vbound.max = vmax[0].GetDouble();
+        bus->_net_id = net_id;
+        _microgrid_ids.insert(net_id);
 //        vm_s_.add_val("ph1,"+bus->_name, 0.9999742573517363);
 //        vm_s_.add_val("ph2,"+bus->_name, 1.0000038391442767);
 //        vm_s_.add_val("ph3,"+bus->_name, 0.9999622416976457);
@@ -1635,6 +1870,10 @@ void PowerNet::readJSON(const string& fname){
         arc->_id = index-1;
         arc->_src = get_node(to_string(f_bus));
         arc->_dest= get_node(to_string(t_bus));
+        arc->_tie_line = arc->_src->_net_id!=arc->_dest->_net_id;
+        if(arc->_tie_line){
+            DebugOn("Tie line: " << arc->_name << endl);
+        }
         arc->status = status;
         arc->_len = length;
         arc->_is_transformer = (tr=="true");
@@ -1647,16 +1886,16 @@ void PowerNet::readJSON(const string& fname){
             auto src = arc->_src->_name;
             auto dest = arc->_dest->_name;
             if (arc->_src->_phases.count(i+1)!=0 && arc->_dest->_phases.count(i+1)!=0) {
-                exist_E_ph.add(ph_key);
+                exist_E_ph.insert(ph_key);
                 E_ph.insert(ph_key);
                 if(i==0){
-                    E_ph1.add(ph_key);
+                    E_ph1.insert(ph_key);
                 }
                 else if(i==1){
-                    E_ph2.add(ph_key);
+                    E_ph2.insert(ph_key);
                 }
                 else {
-                    E_ph3.add(ph_key);
+                    E_ph3.insert(ph_key);
                 }
                 arc->_phases.insert(i+1);
             }
@@ -1710,8 +1949,11 @@ void PowerNet::readJSON(const string& fname){
         }
         
         for (auto i= 0; i<3; i++) {
-            
+            if(arc->_phases.count(i+1)==0)
+                continue;
             for (auto j= 0; j<3; j++) {
+                if(arc->_phases.count(j+1)==0)
+                    continue;
                 auto key = "ph"+to_string(i+1)+",ph"+to_string(j+1)+","+arc->_name;
                 cross_phase.insert(key);
                 g.add_val(key, ymat_inv(i,j).real());
@@ -1777,7 +2019,7 @@ void PowerNet::readJSON(const string& fname){
         for(auto i=0; i<3; i++){
             auto ph_key = "ph"+to_string(i+1)+","+gen->_name;
             G_ph.insert(ph_key);
-            exist_G_ph.add(ph_key);
+            exist_G_ph.insert(ph_key);
             pg_.add_val(ph_key, pg[i].GetDouble());
             qg_.add_val(ph_key, qg[i].GetDouble());
         }
@@ -1865,11 +2107,11 @@ void PowerNet::time_expand(const indices& T) {
     //    eff_b.time_expand(T);
 }
 
-shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, double tol, int max_nb_hours){
+shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, double tol, int max_nb_hours, bool networked){
     
    
     /* Grid Parameters */
-    
+    _nb_hours = max_nb_hours;
     
     /** Indices Sets */
     hours = time(1,max_nb_hours); /**< Hours */
@@ -1882,7 +2124,6 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     indices years = time("year1");
     years._name = "years";
 //    indices months = time("summer", "spring", "autumn", "winter");
-    indices months = time("summer");
     months._name = "months";
     indices phases = indices("ph1","ph2","ph3");
     phases._name = "phases";
@@ -1898,27 +2139,25 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     Et2 = indices(T,E_ph2);
     Et3 = indices(T,E_ph3);
     Gt = indices(T,G_ph);
+    PVt = indices(T,PV_ph);
+    Wt = indices(T,Wind_ph);
     exist_Gt = indices(T,exist_G_ph);
     exist_Bt = indices(T,exist_B_ph);
     exist_Et = indices(T,exist_E_ph);
+    exist_PVt = indices(T,exist_PV_ph);
+    exist_Windt = indices(T,exist_Wind_ph);
     pot_Gt = indices(T,pot_G_ph);
     pot_Bt = indices(T,pot_B_ph);
     pot_Et = indices(T,pot_E_ph);
+    pot_PVt = indices(T,pot_PV_ph);
+    pot_Windt = indices(T,pot_Wind_ph);
     Bt = indices(T,B_ph);
-    Wt = indices(T,phases,_all_wind_gens);
-    PVt = indices(T,phases,_all_PV_gens);
-    PV_pot_t = indices(T,phases,_potential_PV_gens);
-    pot_gen = indices(T,phases,_potential_diesel_gens);
-    pot_batt = indices(_potential_battery_inverters);
-    pot_edges = indices(_potential_expansion);
-    pot_pv = indices(_potential_PV_gens);
     /** Sets */
     auto bus_pairs = this->get_bus_pairs();
-//    auto Pt = indices(T,phases,bus_pairs);/* Time extended bus pairs */
-//    auto Pt1 = indices(T,"ph1",bus_pairs);/* Time extended bus pairs on phase 1 */
-//    auto Pt2 = indices(T,"ph2",bus_pairs);/* Time extended bus pairs on phase 2 */
-//    auto Pt3 = indices(T,"ph3",bus_pairs);/* Time extended bus pairs on phase 3 */
     auto gen_nodes = this->gens_per_node_time();
+    auto batt_nodes = this->Batt_per_node_time();
+    auto PV_nodes = this->PV_per_node_time();
+    auto Wind_nodes = this->Wind_per_node_time();
     auto out_arcs = this->out_arcs_per_node_time();
     auto in_arcs = this->in_arcs_per_node_time();
     
@@ -1930,28 +2169,32 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     /* Investment binaries */
 
     var<> Pv_cap("Pv_cap", 0, pv_max); /**< Real variable indicating the extra capacity of PV to be installed on bus b */
-    ODO->add(Pv_cap.in(pot_pv));
+    ODO->add(Pv_cap.in(pot_PV_ph));
     var<int> w_g("w_g",0,1); /**< Binary variable indicating if generator g is built on bus */
     var<int> w_b("w_b",0,1); /**< Binary variable indicating if battery b is built on bus */
     var<int> w_e("w_e",0,1); /**< Binary variable indicating if expansion is selected for edge e */
     var<int> w_pv("w_pv",0,1); /**< Binary variable indicating if PV is installed on bus b */
-    ODO->add(w_g.in(pot_gen),w_b.in(pot_batt),w_e.in(pot_edges),w_pv.in(pot_pv));
+    var<int> w_wind("w_wind",0,1); /**< Binary variable indicating if Wind is installed on bus b */
+    ODO->add(w_g.in(pot_G_ph),w_b.in(pot_B_ph),w_e.in(pot_E_ph),w_pv.in(pot_PV_ph),w_wind.in(pot_Wind_ph));
     w_g.initialize_all(1);
     w_b.initialize_all(1);
     w_e.initialize_all(1);
     w_pv.initialize_all(1);
+    w_wind.initialize_all(1);
 
     this->w_g = w_g;
     this->w_b = w_b;
     this->w_e = w_e;
     this->w_pv = w_pv;
+    this->w_wind = w_wind;
     this->Pv_cap = Pv_cap;
 
-    DebugOn("size w_g = " << w_g.get_dim() << endl);
-    DebugOn("size w_b = " << w_b.get_dim() << endl);
-    DebugOn("size w_e = " << w_e.get_dim() << endl);
-    DebugOn("size w_pv = " << w_pv.get_dim() << endl);
-    DebugOn("size Pv_cap = " << Pv_cap.get_dim() << endl);
+    DebugOff("size w_g = " << w_g.get_dim() << endl);
+    DebugOff("size w_b = " << w_b.get_dim() << endl);
+    DebugOff("size w_e = " << w_e.get_dim() << endl);
+    DebugOff("size w_pv = " << w_pv.get_dim() << endl);
+    DebugOff("size w_wind = " << w_wind.get_dim() << endl);
+    DebugOff("size Pv_cap = " << Pv_cap.get_dim() << endl);
 
 
     /* Diesel power generation variables */
@@ -1963,10 +2206,10 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     ODO->add(Pg_.in(Gt));
     ODO->add(Qg.in(Gt));
     ODO->add(Pg2.in(pot_Gt));
-    DebugOn("size Pg = " << Pg.get_dim() << endl);
-    DebugOn("size Pg_ = " << Pg_.get_dim() << endl);
-    DebugOn("size Qg = " << Qg.get_dim() << endl);
-    DebugOn("size Pg2 = " << Pg2.get_dim() << endl);
+    DebugOff("size Pg = " << Pg.get_dim() << endl);
+    DebugOff("size Pg_ = " << Pg_.get_dim() << endl);
+    DebugOff("size Qg = " << Qg.get_dim() << endl);
+    DebugOff("size Pg2 = " << Pg2.get_dim() << endl);
 
     this->Pg_ = Pg_;
 
@@ -1975,24 +2218,24 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     var<> Qb ("Qb", qb_min.in(Bt), qb_max.in(Bt));/**< Reactive power generation outside the battery */
     var<> Pb_("Pb_", pb_min.in(Bt), pb_max.in(Bt));/**< Active power generation in the battery */
     ODO->add(Pb.in(Bt), Qb.in(Bt), Pb_.in(Bt));
-    DebugOn("size Pb = " << Pb.get_dim() << endl);
-    DebugOn("size Qb = " << Qb.get_dim() << endl);
+    DebugOff("size Pb = " << Pb.get_dim() << endl);
+    DebugOff("size Qb = " << Qb.get_dim() << endl);
 
 
     /* PV power generation variables */
     var<> Pv("Pv", 0,pv_max.in(PVt));
     ODO->add(Pv.in(PVt));
-    DebugOn("size Pv = " << Pv.get_dim() << endl);
+    DebugOff("size Pv = " << Pv.get_dim() << endl);
 
     /* Battery state of charge variables */
     var<> Sc("Sc", pos_);
     ODO->add(Sc.in(Bt));
-    DebugOn("size Sc = " << Sc.get_dim() << endl);
+    DebugOff("size Sc = " << Sc.get_dim() << endl);
 
     /* Wind power generation variables */
-    var<> Pw("Pw", pw_min.in(Wt), pw_max.in(Wt));
+    var<> Pw("Pw", 0, pw_max.in(Wt));
     ODO->add(Pw.in(Wt));
-    DebugOn("size Pw = " << Pw.get_dim() << endl);
+    DebugOff("size Pw = " << Pw.get_dim() << endl);
 
     /* Power flow variables */
     var<> Pij("Pfrom", -1*S_max.in(Et), S_max.in(Et));
@@ -2001,7 +2244,7 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     var<> Qji("Qto", -1*S_max.in(Et), S_max.in(Et));
 
     ODO->add(Pij.in(Et),Pji.in(Et),Qij.in(Et),Qji.in(Et));
-    DebugOn("size Pij = " << Pij.get_dim() << endl);
+    DebugOff("size Pij = " << Pij.get_dim() << endl);
     if (pmt!=LDISTF) {
         ODO->add(Pji.in(Et),Qji.in(Et));
     }
@@ -2011,8 +2254,6 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     var<> theta("𝛉");
     var<> vr("vr", -1*v_max.in(Nt),v_max.in(Nt));
     var<> vi("vi", -1*v_max.in(Nt),v_max.in(Nt));
-//    var<> wr("wr", -3,3);/**< variable representing the real part of (Vi - Vj) */
-//    var<> wi("wi", -3,3);
     
     var<> v_fr, v_to, theta_fr, theta_to;
     var<> v_fr1, v_to1, theta_fr1, theta_to1;
@@ -2115,6 +2356,8 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     }
     Sij.real_imag(Pij1,Qij1);
     Sji.real_imag(Pji1,Qji1);
+    
+    
     Constraint<Cpx> S_fr1("S_fr1"), S_to1("S_to1");
     S_fr1 = Sij - (conj(Y0)+conj(Yc_fr))*Vfr*conj(Vfr) + conj(Y0)*Vfr*conj(Vto) - (conj(Y1)*Vi)*(conj(Vi1) - conj(Vj1));
     S_to1 = Sji - (conj(Y0)+conj(Yc_to))*Vto*conj(Vto) + conj(Y0)*Vto*conj(Vfr) - (conj(Y1)*Vj)*(conj(Vj1) - conj(Vi1));
@@ -2207,12 +2450,12 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     //check pot_gen
     func<> obj = product(c1.in(exist_Gt), Pg_.in(exist_Gt)) + product(c1.in(pot_Gt), Pg_.in(pot_Gt)) + product(c2.in(exist_Gt), pow(Pg_.in(exist_Gt),2)) + product(c2.in(pot_Gt), Pg2.in(pot_Gt)) + sum(c0.in(exist_Gt));
     //    obj *= 12./months.size();
-    obj += nT*product(c0.in(pot_gen),w_g.in(pot_gen));
-    obj += product(gen_capcost.in(pot_gen), w_g.in(pot_gen));
-    obj += product(inverter_capcost.in(pot_batt), w_b.in(pot_batt));
-    obj += product(expansion_capcost.in(pot_edges), w_e.in(pot_edges));
-    obj += product(pv_capcost.in(pot_pv), w_pv.in(pot_pv));
-    obj += product(pv_varcost.in(pot_pv), Pv_cap.in(pot_pv));
+//    obj += nT*product(c0.in(pot_G_ph),w_g);
+    obj += 1e-3*product(gen_capcost.in(pot_G_ph), w_g);
+    obj += 1e-3*product(inverter_capcost.in(pot_B_ph), w_b);
+    obj += 1e-3*product(expansion_capcost.in(pot_E_ph), w_e);
+    obj += 1e-3*product(pv_capcost.in(pot_PV_ph), w_pv);
+    obj += 1e-3*product(pv_varcost.in(pot_PV_ph), Pv_cap);
     ODO->min(obj);
 //    obj += sum(Pg);
 //    ODO->min(sum(Pg));
@@ -2250,8 +2493,7 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     /** KCL Flow conservation */
     Constraint<> KCL_P("KCL_P");
     Constraint<> KCL_Q("KCL_Q");
-    gen_nodes.print();
-    KCL_P  = sum(Pij, out_arcs) + sum(Pji, in_arcs) + pl.in(Nt) - sum(Pg, gen_nodes);
+    KCL_P  = sum(Pij, out_arcs) + sum(Pji, in_arcs) + pl.in(Nt) - sum(Pg, gen_nodes) - sum(Pv, PV_nodes) - sum(Pb, batt_nodes) - sum(Pw, Wind_nodes);
     KCL_Q  = sum(Qij, out_arcs) + sum(Qji, in_arcs) + ql.in(Nt) - sum(Qg, gen_nodes);
     if(pmt==ACPOL){
         KCL_P += gs_.in(Nt)*pow(v.in(Nt),2);
@@ -2282,12 +2524,12 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     Constraint<> Thermal_Limit_from_exp("Thermal_Limit_From_Exp");
     Thermal_Limit_from_exp += pow(Pij.in(pot_Et), 2) + pow(Qij.in(pot_Et), 2);
     Thermal_Limit_from_exp -= pow(w_e.in(pot_Et),2)*pow(S_max.in(pot_Et), 2);
-//    ODO->add(Thermal_Limit_from_exp.in(pot_Et) <= 0);
+    ODO->add(Thermal_Limit_from_exp.in(pot_Et) <= 0);
     
     Constraint<> Thermal_Limit_to_exp("Thermal_Limit_to_Exp");
     Thermal_Limit_to_exp += pow(Pji.in(pot_Et), 2) + pow(Qji.in(pot_Et), 2);
     Thermal_Limit_to_exp -= pow(w_e.in(pot_Et),2)*pow(S_max.in(pot_Et), 2);
-//    ODO->add(Thermal_Limit_to_exp.in(pot_Et) <= 0);
+    ODO->add(Thermal_Limit_to_exp.in(pot_Et) <= 0);
 
     /** AC voltage limit constraints. */
     if (pmt==ACRECT) {
@@ -2318,25 +2560,25 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     ODO->add(OnOff_maxQ.in(pot_Gt) <= 0);
 
     Constraint<> OnOff_maxQ_N("OnOff_maxQ_N");
-    OnOff_maxQ_N += Qg.in(pot_Gt) + qg_max.in(pot_Gt)*w_g.in(pot_Gt);
+    OnOff_maxQ_N += Qg.in(pot_Gt) - qg_min.in(pot_Gt)*w_g.in(pot_Gt);
     ODO->add(OnOff_maxQ_N.in(pot_Gt) >= 0);
 
      /**  PV **/
 
     /*  On/Off on Potential PV */
-//    Constraint<> OnOffPV("OnOffPV");
-//    OnOffPV += Pv_cap.in(_potential_PV_gens) - w_pv*pv_max.in(_potential_PV_gens);
-//    ODO->add(OnOffPV.in(_potential_PV_gens) <= 0);
-//
-//    /*  Max Cap on Potential PV */
-//    Constraint<> MaxCapPV("MaxCapPV");
-//    MaxCapPV += Pv.in(PV_pot_t) - Pv_cap.in(PV_pot_t)*pv_out.in(PV_pot_t);
-//    ODO->add(MaxCapPV.in(PV_pot_t) <= 0);
-//
-//    /*  Existing PV */
-//    Constraint<> existPV("existPV");
-//    existPV += Pv - pv_max*pv_out;
-//    ODO->add(existPV.in(indices(_existing_PV_gens, T)) <= 0);
+    Constraint<> OnOffPV("OnOffPV");
+    OnOffPV += Pv_cap.in(pot_PV_ph) - w_pv*pv_max.in(pot_PV_ph);
+    ODO->add(OnOffPV.in(pot_PV_ph) <= 0);
+
+    /*  Max Cap on Potential PV */
+    Constraint<> MaxCapPV("MaxCapPV");
+    MaxCapPV += Pv.in(pot_PVt) - Pv_cap.in(pot_PVt)*pv_out.in(pot_PVt);
+    ODO->add(MaxCapPV.in(pot_PVt) <= 0);
+
+    /*  Existing PV */
+    Constraint<> existPV("existPV");
+    existPV += Pv.in(exist_PVt) - pv_max.in(exist_PVt)*pv_out.in(exist_PVt);
+    ODO->add(existPV.in(exist_PVt) <= 0);
 
 
     /**  BATTERIES **/
@@ -2362,15 +2604,15 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     Constraint<> State_Of_Charge("State_Of_Charge");
     State_Of_Charge = Sc.in(Bt1) - Sc.in(Btn) + Pb_.in(Bt1);
     ODO->add(State_Of_Charge.in(Bt1) == 0);
-//
-//    /*  State Of Charge 0 */
-//    auto Bat0 = indices(_battery_inverters,phases,T.first());
-//    Constraint<> State_Of_Charge0("State_Of_Charge0");
-//    State_Of_Charge0 = Sc;
-//    ODO->add(State_Of_Charge0.in(Bat0) == 0);
-//    Constraint<> Pb0("Pb0");
-//    Pb0 = Pb_;
-//    ODO->add(Pb0.in(Bat0) == 0);
+
+    /*  State Of Charge 0 */
+    auto Bat0 = indices(indices(T.first()),B_ph);
+    Constraint<> State_Of_Charge0("State_Of_Charge0");
+    State_Of_Charge0 = Sc.in(Bat0);
+    ODO->add(State_Of_Charge0.in(Bat0) == 0);
+    Constraint<> Pb0("Pb0");
+    Pb0 = Pb_.in(Bat0);
+    ODO->add(Pb0.in(Bat0) == 0);
 
     /*  EFFICIENCIES */
     Constraint<> DieselEff("DieselEff");
@@ -3365,7 +3607,7 @@ indices PowerNet::get_bus_pairs_chord(){
     for (auto a: arcs) {
         if (!a->_parallel) {
             unique_pairs.insert({a->_src,a->_dest});
-            bpairs.add(a->_src->_name+","+a->_dest->_name);
+            bpairs.insert(a->_src->_name+","+a->_dest->_name);
         }
     }
     string key;
@@ -3407,7 +3649,7 @@ indices PowerNet::get_bus_pairs_chord(){
                 wr_min.add_val(name,wr_min_);
                 wi_max.add_val(name,wi_max_);
                 wi_min.add_val(name,wi_min_);
-                bpairs.add(name);
+                bpairs.insert(name);
             }
         }
         /* Loop back pair */
@@ -3428,7 +3670,7 @@ indices PowerNet::get_bus_pairs_chord(){
             wr_min.add_val(name,wr_min_);
             wi_max.add_val(name,wi_max_);
             wi_min.add_val(name,wi_min_);
-            bpairs.add(name);
+            bpairs.insert(name);
         }
     }
     return bpairs;

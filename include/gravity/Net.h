@@ -63,7 +63,7 @@ public:
     std::vector<std::vector<Node*>> _bags_copy; // each node is a copy of the original node (not by reference).
 
     /** Clone the graph exactly **/
-    Net* clone();
+    Net* clone() const;
 
     /** Clone to get a copied (Undirected) graph: no parallel lines, at most one
      * arc between two nodes*/
