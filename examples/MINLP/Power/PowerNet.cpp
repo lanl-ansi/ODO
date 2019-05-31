@@ -28,11 +28,30 @@
 #include <rapidjson/reader.h>
 #include <rapidjson/istreamwrapper.h>
 #include <armadillo>
+#include <ctime>
 
 using namespace std;
 using namespace rapidjson;
 
 PowerNet::PowerNet() {
+    time ( &_rawtime );
+//    _start_date = localtime ( &_rawtime );
+//    _start_date->tm_year = 2019 - 1900;
+//    _start_date->tm_mon = 0;
+//    _start_date->tm_mday = 1;
+//    _start_date->tm_hour = 1;
+//    _start_date->tm_min = 0;
+//    _start_date->tm_sec = 0;
+//    mktime ( _start_date );
+//    time ( &_loadrawtime );
+//    _demand_start_date = localtime ( &_loadrawtime );
+//    _demand_start_date->tm_year = 2019 - 1900;
+//    _demand_start_date->tm_mon = 0;
+//    _demand_start_date->tm_mday = 1;
+//    _demand_start_date->tm_hour = 1;
+//    _demand_start_date->tm_min = 0;
+//    _demand_start_date->tm_sec = 0;
+//    mktime ( _demand_start_date );
     bMVA = 0;
     pg_min.set_name("pg_min");
     pg_max.set_name("pg_max");
@@ -509,6 +528,41 @@ indices PowerNet::get_branch_phase(unsigned ph) const{
             auto it1 = ids._keys_map->find(key);
             if (it1 == ids._keys_map->end()){
                 throw invalid_argument("In function get_branch_phase(), unknown key.");
+            }
+            ids._ids->at(inst).push_back(it1->second);
+        }
+        inst++;
+    }
+    return ids;
+}
+
+indices PowerNet::Load_per_node_time() const{
+    auto ids = Lt;
+    ids._name = "Load_per_node_time";
+    ids._ids = make_shared<vector<vector<size_t>>>();
+    ids._ids->resize(Nt.size());
+    string key, time_stamp;
+    size_t inst = 0;
+    for (auto key: *Nt._keys) {
+        auto pos = key.find_last_of(",");
+        auto name = key.substr(pos+1);
+        key = key.substr(0,pos);
+        pos = key.find_last_of(",");
+        auto ph = key.substr(pos+1);
+        key = key.substr(0,pos);
+        auto n = get_node(name);
+        if (!n->_active) {
+            continue;
+        }
+        for (auto p:((Bus*)n)->_loads) {
+            auto l = p.second;
+            if (!l->_active || !l->has_phase(ph)) {
+                continue;
+            }
+            auto lname = key+","+ph+","+l->_name;
+            auto it1 = ids._keys_map->find(lname);
+            if (it1 == ids._keys_map->end()){
+                throw invalid_argument("In function loads_per_node_time(), unknown key: " + lname);
             }
             ids._ids->at(inst).push_back(it1->second);
         }
@@ -1450,27 +1504,39 @@ int PowerNet::readODO(const string& fname){
     indices months = time("jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"); /**< Months */
     bool has_monthseason = true;
     try{
-        ws = wb.sheet_by_title("monthseason");
+        ws = wb.sheet_by_title("MonthSeason");
     }
     catch(xlnt::key_not_found err){
         has_monthseason = false;
     }
     unsigned week_days = 0,weekend_days = 0,peak_days = 0;
     if (has_monthseason) {
-        clog << "Processing monthseason" << std::endl;
+        clog << "Processing MonthSeason" << std::endl;
         row_it = ws.rows().begin();
         row_it++;//SKIP FRIST ROW
         SeasonType season;
+        int month_id = 1;
         while (row_it!=ws.rows().end()) {
             auto row = *row_it++;
             name = row[0].to_string();
             if (row[1].value<int>()==1) {
-                season = summer_;
-            }
-            else {
                 season = winter_;
+                _months_season[month_id] = "winter";
+            }
+            else if (row[2].value<int>()==1) {
+                season = spring_;
+                _months_season[month_id] = "spring";
+            }
+            else if (row[3].value<int>()==1) {
+                season = summer_;
+                _months_season[month_id] = "summer";
+            }
+            else  {
+                season = autumn_;
+                _months_season[month_id] = "autumn";
             }
             _months_data.push_back(Month(name, season,week_days,weekend_days,peak_days));
+            month_id++;
         }
     }
     else {
@@ -1601,6 +1667,95 @@ int PowerNet::readODO(const string& fname){
             }
         }
     }
+    bool found_LoadData = true;
+    try{
+        ws = wb.sheet_by_title("LoadTimeSeries");
+    }
+    catch(xlnt::key_not_found err) {
+        found_WindVariance = false;
+        cerr << "Cannot find sheet LoadTimeSeries, setting all loads to 0." << endl;
+    }
+    if(found_LoadData){
+//    if(false){
+        clog << "Processing LoadTimeSeries" << std::endl;
+        size_t row_id = 1;
+        row_it = ws.rows().begin();
+        row_it++;//SKIP FRIST ROW
+        auto row = *row_it++;
+        auto tstamp = row[0].value<xlnt::datetime>();
+        int day = tstamp.day;
+        DebugOn("day = " << to_string(day) << endl);
+        int month = tstamp.month;
+        DebugOn("month = " << to_string(month) << endl);
+        int year = tstamp.year;
+        DebugOn("year = " << to_string(year) << endl);
+        int hour = round(tstamp.hour + tstamp.minute*1./60.);
+        DebugOn("hour = " << to_string(hour) << endl);
+//        _demand_start_date->tm_year = year - 1900;
+//        _demand_start_date->tm_mon = month-1;
+//        _demand_start_date->tm_mday = day;
+//        _demand_start_date->tm_hour = hour;
+//        mktime ( _demand_start_date );
+//        DebugOn("Historical load data start time is: " << asctime(_demand_start_date));
+        auto col_it = ws.columns().begin();
+        col_it++;
+        Cpx load;
+        while (col_it!=ws.columns().end()) {
+            auto col = *col_it++;
+            auto load_name = col[0].value<string>();
+            auto phase = stoi(load_name.substr(load_name.size()-1));
+            load_name = load_name.substr(0,load_name.size()-8);
+            load_name = "ph"+to_string(phase)+","+load_name;
+            auto load_val = col[1].value<string>();
+            istringstream is(load_val);
+            is >> load;
+            auto bus = (Bus*)_load_map.at(load_name);
+            auto l = bus->_loads.at(load_name);
+            l->_phases.insert(phase);
+            l->_val[{year,month,day,hour}] = load;
+        }
+        
+        while (row_it!=ws.rows().end()) {
+            row = *row_it++;
+            row_id++;
+            tstamp = row[0].value<xlnt::datetime>();
+            day = tstamp.day;
+            DebugOff("day = " << to_string(day) << endl);
+            month = tstamp.month;
+            DebugOff("month = " << to_string(month) << endl);
+            year = tstamp.year;
+            DebugOff("year = " << to_string(year) << endl);
+            hour = round(tstamp.hour + tstamp.minute*1./60.);
+            DebugOff("hour = " << to_string(hour) << endl);
+//            auto _date = tm();
+//            _date.tm_year = tstamp.year - 1900;
+//            _date.tm_mon = tstamp.month-1;
+//            _date.tm_mday = tstamp.day;
+//            _date.tm_hour = tstamp.hour;
+//            mktime ( &_date );
+            
+//            DebugOff("Time stamp: " << asctime(&_date) << endl);
+            col_it = ws.columns().begin();
+            col_it++;
+            while (col_it!=ws.columns().end()) {
+                auto col = *col_it++;
+                auto load_name = col[0].value<string>();
+                auto phase = stoi(load_name.substr(load_name.size()-1));
+                load_name = load_name.substr(0,load_name.size()-8);
+                load_name = "ph"+to_string(phase)+","+load_name;
+                DebugOff("load name = " << load_name << endl);
+                auto load_val = col[row_id].value<string>();
+                istringstream is(load_val);
+                is >> load;
+                auto bus = (Bus*)_load_map.at(load_name);
+                auto l = bus->_loads.at(load_name);
+                l->_phases.insert(phase);
+                l->_val[{year,month,day,hour}] = load;
+            }
+
+        }
+        compute_loads();
+    }
     
     
     string key;
@@ -1609,7 +1764,7 @@ int PowerNet::readODO(const string& fname){
         auto b = (Bus*)nodes[i];
         auto potential_PV = b->_max_PV_cap;
         auto potential_wind = b->_max_Wind_cap;
-        if (potential_PV>0) {
+        if (potential_PV - b->_existing_PV_cap>0) {
             auto new_pv = b->_pv.back();
             auto name = new_pv->_name;
             this->pv_max.add_val(name, potential_PV/bMVA);
@@ -1652,7 +1807,7 @@ int PowerNet::readODO(const string& fname){
                 }
             }
         }
-        if (potential_wind>0) {
+        if (potential_wind - b->_existing_Wind_cap>0) {
             auto new_wind = b->_wind.back();
             auto name = new_wind->_name;
             for (unsigned y = 0; y<_nb_years; y++) {
@@ -1691,6 +1846,7 @@ int PowerNet::readODO(const string& fname){
     }
     //    clog << "Loads:\n";
     //    pl.print(true);
+    
     clog << "Reading excel file complete" << std::endl;
     return 0;
 }
@@ -1808,8 +1964,8 @@ void PowerNet::readJSON(const string& fname){
                 }
                 gs_.add_val(ph_key, 0);
                 bs_.add_val(ph_key, 0);
-                pl.add_val(ph_key, 0);
-                ql.add_val(ph_key, 0);
+//                pl.add_val(ph_key, 0);
+//                ql.add_val(ph_key, 0);
             }
             else {
                 DebugOn("excluding bus: " << bus->_name << " on phase " << i+1 << endl);
@@ -2032,21 +2188,28 @@ void PowerNet::readJSON(const string& fname){
         auto status =  list["status"].GetInt();
         auto pd =  list["pd"].GetArray();
         auto qd =  list["qd"].GetArray();
+        auto load_name = list["name"].GetString();
+        auto critical = list["critical"].GetInt();
         auto bus = (Bus*)get_node(to_string(lbus));
+        for(auto ph=1; ph<=3; ph++){
+            auto key = "ph"+to_string(ph) +","+string(load_name);
+            _load_map[key] = bus;
+            bus->_loads[key] = make_shared<Load>(load_name, critical);
+        }
         auto name = bus->_name;
         for(auto i=0; i<3; i++){
             auto ph_key = "ph"+to_string(i+1)+","+name;
             if(bus->has_phase(i+1)){
                 bus->_cond[i]->_pl = pd[i].GetDouble();
                 bus->_cond[i]->_ql = qd[i].GetDouble();
-                if(status){
-                    pl.set_val(ph_key, pd[i].GetDouble());
-                    ql.set_val(ph_key, qd[i].GetDouble());
-                }
-                else {
-                    pl.set_val(ph_key, 0);
-                    ql.set_val(ph_key, 0);
-                }
+//                if(status){
+//                    pl.set_val(ph_key, pd[i].GetDouble());
+//                    ql.set_val(ph_key, qd[i].GetDouble());
+//                }
+//                else {
+//                    pl.set_val(ph_key, 0);
+//                    ql.set_val(ph_key, 0);
+//                }
             }
         }
     }
@@ -2069,6 +2232,98 @@ void PowerNet::readJSON(const string& fname){
             //            bs_.add_val(bus->_name+",ph"+to_string(i+1), 0);
         }
         
+    }
+}
+
+/** Use the time series data to compute averages for typical days */
+void PowerNet::compute_loads(){
+    for (unsigned i = 0; i<nb_nodes; i++) {
+        auto b = (Bus*)nodes[i];
+        for (auto year = 0; year < _nb_years; year++) {
+            for (string season :{"summer","winter","spring", "autumn"}) {
+                for (auto h = 0; h<24; h++) {
+                    for (string phase: {"ph1","ph2","ph3"}) {
+                        auto week_key = "year"+to_string(year+1)+","+season+",week,"+to_string(h+1) + "," + phase+ "," + b->_name;
+                        auto weekend_key = "year"+to_string(year+1)+","+season+",weekend,"+to_string(h+1) + "," + phase+ "," + b->_name;
+                        auto peak_key = "year"+to_string(year+1)+","+season+",peak,"+to_string(h+1) + "," + phase+ "," + b->_name;
+                        pl.add_val(week_key, 0);
+                        ql.add_val(week_key, 0);
+                        pl.add_val(weekend_key, 0);
+                        ql.add_val(weekend_key, 0);
+                        pl.add_val(peak_key, 0);
+                        ql.add_val(peak_key, 0);
+                    }
+                }
+            }
+        }
+        for(auto &l: b->_loads){
+            if(!l.second->_active || l.second->_val.empty()){
+                continue;
+            }
+            auto key = l.first;
+            double p_av_week[4][24], p_av_weekend[4][24], p_peak[4][24];
+            double q_av_week[4][24], q_av_weekend[4][24], q_peak[4][24];
+            int nb_week[4][24], nb_weekend[4][24];
+            for (auto i = 0; i<4; i++) {
+                for (auto j = 0; j<24; j++) {
+                    p_av_week[i][j] = 0;
+                    p_av_weekend[i][j] = 0;
+                    p_peak[i][j] = 0;
+                    q_av_week[i][j] = 0;
+                    q_av_weekend[i][j] = 0;
+                    q_peak[i][j] = 0;
+                    nb_week[i][j] = 0;
+                    nb_weekend[i][j] = 0;
+                }
+            }
+            for (auto &p: l.second->_val) {
+                auto tuple = p.first;
+                assert(get<1>(tuple)>0);
+                assert(get<3>(tuple)>=0 && get<3>(tuple)<24);
+                auto season = _months_data.at(get<1>(tuple)-1)._season;
+                auto season_str = _months_season.at(get<1>(tuple));
+                DebugOff("month id = " << to_string(get<1>(tuple)) << endl);
+                DebugOff("season = " << season_str << endl);
+                DebugOff("season int = " << to_string(season) << endl);
+                if(is_weekend(tuple)){
+                    p_av_weekend[season][get<3>(tuple)]+=p.second.real();
+                    q_av_weekend[season][get<3>(tuple)]+=p.second.imag();
+                    nb_weekend[season][get<3>(tuple)]++;
+                }
+                else {
+                    p_av_week[season][get<3>(tuple)]+=p.second.real();
+                    q_av_week[season][get<3>(tuple)]+=p.second.imag();
+                    nb_week[season][get<3>(tuple)]++;
+                }
+                p_peak[season][get<3>(tuple)]=std::max(p_peak[season][get<3>(tuple)],p.second.real());
+                q_peak[season][get<3>(tuple)]=std::max(q_peak[season][get<3>(tuple)],p.second.imag());
+            }
+            //{ summer_=0, winter_=1, spring_=2, autumn_=3}
+            for (auto year = 0; year < _nb_years; year++) {
+                auto season_id = 0;
+                for (string season :{"summer","winter","spring", "autumn"}) {
+                    for (auto h = 0; h<24; h++) {
+                        assert(nb_weekend[season_id][h]!=0);
+                        p_av_weekend[season_id][h] /= nb_weekend[season_id][h];
+                        assert(nb_week[season_id][h]!=0);
+                        p_av_week[season_id][h] /= nb_week[season_id][h];
+                        q_av_weekend[season_id][h] /= nb_weekend[season_id][h];
+                        q_av_week[season_id][h] /= nb_week[season_id][h];
+                        auto phase = key.substr(0,3);
+                        auto week_key = "year"+to_string(year+1)+","+season+",week,"+to_string(h+1) + "," + phase+ "," + b->_name;
+                        auto weekend_key = "year"+to_string(year+1)+","+season+",weekend,"+to_string(h+1) + "," + phase+ "," + b->_name;
+                        auto peak_key = "year"+to_string(year+1)+","+season+",peak,"+to_string(h+1) + "," + phase+ "," + b->_name;
+                        pl.add_val(week_key, p_av_week[season_id][h]);
+                        ql.add_val(week_key, q_av_week[season_id][h]);
+                        pl.add_val(weekend_key, p_av_weekend[season_id][h]);
+                        ql.add_val(weekend_key, q_av_weekend[season_id][h]);
+                        pl.add_val(peak_key, p_peak[season_id][h]);
+                        ql.add_val(peak_key, q_peak[season_id][h]);
+                    }
+                    season_id++;
+                }
+            }
+        }
     }
 }
 
@@ -2494,7 +2749,7 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     Constraint<> KCL_P("KCL_P");
     Constraint<> KCL_Q("KCL_Q");
     KCL_P  = sum(Pij, out_arcs) + sum(Pji, in_arcs) + pl.in(Nt) - sum(Pg, gen_nodes) - sum(Pv, PV_nodes) - sum(Pb, batt_nodes) - sum(Pw, Wind_nodes);
-    KCL_Q  = sum(Qij, out_arcs) + sum(Qji, in_arcs) + ql.in(Nt) - sum(Qg, gen_nodes);
+    KCL_Q  = sum(Qij, out_arcs) + sum(Qji, in_arcs) + ql.in(Nt)  - sum(Qg, gen_nodes);
     if(pmt==ACPOL){
         KCL_P += gs_.in(Nt)*pow(v.in(Nt),2);
         KCL_Q -= bs_.in(Nt)*pow(v.in(Nt),2);

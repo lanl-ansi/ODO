@@ -7934,7 +7934,7 @@ namespace gravity {
         func<T2> res;
         constant<T2> new_c(c);
         if(c._is_transposed){/* If this is a dot product resize the constant to match p's number of rows */
-            new_c._dim[1] = p._dim[0];
+            new_c._dim[1] = p.get_dim(0);
         }
         res.update_dot_dim(new_c,p);
         res.insert(true,new_c,p);
@@ -8080,6 +8080,16 @@ namespace gravity {
         }
         return unit<type>().tr()*(p.vec()).in(ids);
     }
+    
+    template<typename type>
+    func<type> sum(const param<type>& p, const indices& ids){
+        func<type> res;
+        if (p.get_dim()==0) {
+            return res;
+        }
+        return unit<type>().tr()*(p.vec()).in(ids);
+    }
+    
     template<class T1,class T2, typename enable_if<is_convertible<T1, T2>::value && sizeof(T2) >= sizeof(T1)>::type* = nullptr>
     func<T2> product(const func<T1>& f1, const func<T2>& f2){
         if(f1.is_column_vector() && f2.is_column_vector()){/* This is a dot product */

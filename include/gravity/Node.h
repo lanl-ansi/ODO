@@ -29,6 +29,8 @@ public:
     bool _active = true;
     std::vector<Arc*> branches;
     
+    
+    
     /* the number of edges needed to make the subgraph formed by adjacent nodes a clique */
     int fill_in = 0;
 

@@ -74,6 +74,11 @@ bool operator >=(const gravity::Cpx& lhs, const gravity::Cpx& rhs);
 
 namespace gravity{
     
+    bool is_weekend(const tuple<int,int,int,int>& ymdh);
+    
+    
+    int get_nb_days_in_month(const tm& timeinfo);
+    
     set<int> get_phases(string phases);
 //    Cpx min (const Cpx& a, const Cpx& b);
 //    Cpx max (const Cpx& a, const Cpx& b);

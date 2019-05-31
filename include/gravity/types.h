@@ -196,8 +196,8 @@ namespace gravity{
             _keys.resize(n*(n-1)/2);
             string key;
             size_t index = 0;
-            for (int i = p1-1; i < p2; i++){
-                for (int j = i+1; j < p2; j++){
+            for (auto i = p1-1; i < p2; i++){
+                for (auto j = i+1; j < p2; j++){
                     _keys[index++] = new index_pair(index_(to_string(i)), index_(to_string(j)));
                 }
             }
@@ -210,8 +210,8 @@ namespace gravity{
             _keys.resize(n*(n-1)/2);
             string key;
             size_t index = 0;
-            for (int i = p1-1; i < p2; i++){
-                for (int j = i+1; j < p2; j++){
+            for (auto i = p1-1; i < p2; i++){
+                for (auto j = i+1; j < p2; j++){
                     _keys[index++] = new index_pair(index_(to_string(j)), index_(to_string(i)));
                 }
             }
@@ -288,7 +288,7 @@ namespace gravity{
             _dim->resize(1);
             _dim->at(0) = n;
             size_t index = 0;
-            for (int i = p1; i <= p2; i++){
+            for (auto i = p1; i <= p2; i++){
                 (*_keys_map)[to_string(i)]= index;
                 (*_keys)[index++] = to_string(i);
             }

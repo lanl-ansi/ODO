@@ -37,7 +37,7 @@ int main (int argc, char * argv[])
     int output = 0;
     bool relax = false, use_cplex = false, use_gurobi = false, default_args=false;
     double tol = 1e-6;
-    string mehrotra = "no", log_level="0", nb_hours="1";
+    string mehrotra = "no", log_level="0", nb_hours="6";
     double solver_time_end, total_time_end, solve_time, cont_solve_start, cont_solve_end, cont_solve_time, model_build_time = -1, total_time = -1;
     double total_time_start = get_wall_time();
 
@@ -171,7 +171,7 @@ int main (int argc, char * argv[])
     DebugOn("number of buses = " << Nbus << endl);
 
     auto ODO = grid.build_ODO_model(pmt,output,tol,max_nb_hours);
-    ODO->print();
+//    ODO->print();
 //    return 0;
     
     

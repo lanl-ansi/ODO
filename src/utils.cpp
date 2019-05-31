@@ -1,7 +1,48 @@
 #include <gravity/utils.h>
 #include <gravity/types.h>
+#include <time.h>
 using namespace std;
 using namespace gravity;
+
+bool gravity::is_weekend(const tuple<int,int,int,int>& ymdh){
+//    tm _date;
+//    _date.tm_year = get<0>(ymdh) - 1900;
+//    _date.tm_mon = get<1>(ymdh)-1;
+//    _date.tm_mday = get<2>(ymdh);
+//    _date.tm_hour = get<3>(ymdh);
+//    mktime ( &_date );
+//    return (_date.tm_wday==0 || _date.tm_wday==6);
+//    time_t rawtime;
+//    struct tm * timeinfo;
+//    time ( &rawtime );
+//    timeinfo = localtime ( &rawtime );
+//    std::time_t t = std::time(nullptr);
+//    std::tm timeinfo = *std::localtime(&t);
+//    timeinfo.tm_year = get<0>(ymdh) - 1900;
+//    timeinfo.tm_mon = get<1>(ymdh)-1;
+//    timeinfo.tm_mday = get<2>(ymdh);
+//////    timeinfo->tm_hour = get<3>(ymdh);
+//    mktime ( &timeinfo );
+//    return (timeinfo.tm_wday==0 || timeinfo.tm_wday==6);
+    return (get<2>(ymdh)==1 || get<2>(ymdh)==2);
+}
+
+
+int gravity::get_nb_days_in_month(const tm& timeinfo){
+    int numberOfDays;
+    if (timeinfo.tm_mon == 3 || timeinfo.tm_mon == 5 || timeinfo.tm_mon == 8 || timeinfo.tm_mon == 10)
+        numberOfDays = 30;
+    else if (timeinfo.tm_mon == 1)
+    { bool isLeapYear = ((timeinfo.tm_year+1900) % 4 == 0 && (timeinfo.tm_year+1900) % 100 != 0) || ((timeinfo.tm_year+1900) % 400 == 0);
+        if (isLeapYear)
+            numberOfDays = 29;
+        else
+            numberOfDays = 28;
+    }
+    else
+        numberOfDays = 31;
+    return numberOfDays;
+}
 
 set<int> gravity::get_phases(string phases){
     set<int> _phases;

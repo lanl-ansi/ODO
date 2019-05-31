@@ -18,12 +18,13 @@
 #include <fstream>
 #include <vector>
 #include <assert.h>
+#include <ctime>
 
 using namespace gravity;
 
 
 /** @brief Seasons type */
-typedef enum { summer_, winter_, spring_, autumn_} SeasonType;
+typedef enum { summer_=0, winter_=1, spring_=2, autumn_=3} SeasonType;
 
 
 /** @brief Wind Farm Data */
@@ -87,6 +88,16 @@ typedef enum { ACPOL, ACRECT, DISTF, CDISTF, LDISTF, QC, QC_SDP, OTS, DF, SOCP, 
 class PowerNet: public Net {
 
 public:
+    /**Date represented as a tuple <Year,Month,Day,hour>*/
+    
+    time_t                                                              _rawtime;
+    time_t                                                              _loadrawtime;
+    struct tm*                                                          _start_date;// First time stamp in simulation
+    struct tm*                                                          _demand_start_date;// First time stamp in historical demand data
+    struct tm*                                                          _irrad_start_date;// First time stamp in historical irradiance data
+    struct tm*                                                          _wind_start_date;// First time stamp in historical wind speed data
+
+    map<string, Node*>                                                  _load_map;
     size_t _max_it = 10000;
     size_t _max_time = 3600;
     double  _tol = 1e-6;
@@ -189,6 +200,8 @@ public:
     /** Data on months */
     std::vector<Month> _months_data;
     
+    map<int,string> _months_season;
+    
     /** Data on wind farm */
     WindData _wind_data;
     
@@ -207,7 +220,7 @@ public:
     indices typical_days = time("week","peak","weekend");
 //    typical_days._name = "typical_days";
     //    indices typical_days = time("week");
-    indices phase_T, T= indices("Time"), Nt = indices("Nt"), Nt_load, Nt_no_load, Et = indices("Et"), Et1 = indices("Et1"), Et2 = indices("Et2"), Et3 = indices("Et3"), pot_G_ph = indices("pot_Gph"), pot_Wind_ph = indices("pot_Wind_ph"), pot_PV_ph = indices("pot_PVph"), pot_E_ph = indices("pot_Eph"), pot_B_ph = indices("pot_Bph"), G_ph= indices("Gph"),Wind_ph= indices("Wph"),PV_ph= indices("PVph"), N_ph= indices("Nph"), exist_G_ph = indices("Exist_Gph"),exist_PV_ph = indices("Exist_PVph"),exist_Wind_ph = indices("Exist_Wind_ph"), exist_B_ph = indices("Exist_Bph"), B_ph = indices("Bph"), exist_E_ph = indices("Exist_Eph"), E_ph = indices("Eph"), E_ph1 = indices("Eph1"),E_ph2 = indices("Eph2"), E_ph3 = indices("Eph3"), Gt = indices("Gt"), PVt = indices("PVt"), Windt = indices("Windt"), exist_Gt= indices("exit_Gt"), exist_PVt= indices("exit_PVt"), exist_Windt= indices("exit_Windt"), exist_Bt= indices("exit_Bt"), exist_Et= indices("exit_Et"), pot_Et= indices("pot_Et"), pot_PVt= indices("pot_PVt"),pot_Windt= indices("pot_Windt"), pot_Gt= indices("pot_Gt"), pot_Bt= indices("pot_Bt"), Bt = indices("Bt"), Btn = indices("Btn"), Bt1 = indices("Bt1"), Gt1, Wt, PV_pot_t, pot_gen, pot_batt, pot_edges, pot_pv;
+    indices phase_T, T= indices("Time"), Nt = indices("Nt"), Lt = indices("Lt"), Nt_load, Nt_no_load, Et = indices("Et"), Et1 = indices("Et1"), Et2 = indices("Et2"), Et3 = indices("Et3"), pot_G_ph = indices("pot_Gph"), pot_Wind_ph = indices("pot_Wind_ph"), pot_PV_ph = indices("pot_PVph"), pot_E_ph = indices("pot_Eph"), pot_B_ph = indices("pot_Bph"), G_ph= indices("Gph"),Wind_ph= indices("Wph"),PV_ph= indices("PVph"), N_ph= indices("Nph"), exist_G_ph = indices("Exist_Gph"),exist_PV_ph = indices("Exist_PVph"),exist_Wind_ph = indices("Exist_Wind_ph"), exist_B_ph = indices("Exist_Bph"), B_ph = indices("Bph"), exist_E_ph = indices("Exist_Eph"), E_ph = indices("Eph"), E_ph1 = indices("Eph1"),E_ph2 = indices("Eph2"), E_ph3 = indices("Eph3"), Gt = indices("Gt"), PVt = indices("PVt"), Windt = indices("Windt"), exist_Gt= indices("exit_Gt"), exist_PVt= indices("exit_PVt"), exist_Windt= indices("exit_Windt"), exist_Bt= indices("exit_Bt"), exist_Et= indices("exit_Et"), pot_Et= indices("pot_Et"), pot_PVt= indices("pot_PVt"),pot_Windt= indices("pot_Windt"), pot_Gt= indices("pot_Gt"), pot_Bt= indices("pot_Bt"), Bt = indices("Bt"), Btn = indices("Btn"), Bt1 = indices("Bt1"), Gt1, Wt, PV_pot_t, pot_gen, pot_batt, pot_edges, pot_pv;
     indices Et_opt, Gt_opt, Bt_opt, Bt1_opt, Wt_opt, PVt_opt;
     indices cross_phase = indices("cross_phase");
     indices N_ph1 = indices("Nph1"),N_ph2 = indices("Nph2"), N_ph3 = indices("Nph3");
@@ -255,6 +268,8 @@ public:
     /** Power grid data parser from DERCAM*/
     int readDERCAM(const string& fname);
     
+    /** Use the time series data to compute averages for typical days */
+    void compute_loads();
     
     PowerNet* clone(int net_id) const; /**< clone the subnetwork correpsonding to net_id */
         
@@ -310,6 +325,7 @@ public:
     indices gens_per_node_time() const;
     indices PV_per_node_time() const;
     indices Batt_per_node_time() const;
+    indices Load_per_node_time() const;
     indices Wind_per_node_time() const;
     indices out_arcs_per_node_time() const;
     indices in_arcs_per_node_time() const;

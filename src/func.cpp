@@ -4514,6 +4514,9 @@ namespace gravity{
             throw invalid_argument("In function add_param(v,nb): parameter already contained in function");
         }
 //        update_dim(*p);
+//        if(p->is_double_indexed()){
+//            _indices = p->_indices;
+//        }
         _params->insert(make_pair<>(p->get_name(false,false), make_pair<>(p, nb)));
     }
     

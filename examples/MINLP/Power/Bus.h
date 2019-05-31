@@ -109,6 +109,25 @@ public:
         };
     };
 
+class Load: public gravity::aux{
+public:
+    
+    
+    string _type_name="Load";
+    
+    map<tuple<int,int,int,int>,Cpx>                                     _val;
+    int                                                                 _critical_level;
+    
+    Load(){};
+    Load(string name, int critical_level): _critical_level(critical_level){
+        _active = true;
+        _name = name;
+    };
+    
+    void print() const{
+        cout << "name = " << _name << ", critical level = " << _critical_level << endl;
+    };
+};
 
 class PV: public gravity::aux{
 public:
@@ -319,6 +338,10 @@ public:
     
     /** @brief Set of lines connected to this bus */
     std::map<int, Line*> _lines;
+    
+    map<string,shared_ptr<Load>>                                        _loads;
+    vector<pair<tuple<int,int,int,int>,double>>                         _solar_data;
+    vector<pair<tuple<int,int,int,int>,double>>                         _wind_data;
     
     /** @brief Function representing the sum of real power injections at this bus */
     gravity::func_ p_injec;
