@@ -33,16 +33,26 @@
 using namespace std;
 using namespace rapidjson;
 
+bool PowerNet::is_weekend(const tuple<int,int,int,int>& ymdh){
+
+    _start_date->tm_year = get<0>(ymdh) - 1900;
+    _start_date->tm_mon = get<1>(ymdh)-1;
+    _start_date->tm_mday = get<2>(ymdh);
+    mktime ( _start_date );
+    return (_start_date->tm_wday==0 || _start_date->tm_wday==6);
+//    return (get<2>(ymdh)==1 || get<2>(ymdh)==2);
+}
+
 PowerNet::PowerNet() {
     time ( &_rawtime );
-//    _start_date = localtime ( &_rawtime );
-//    _start_date->tm_year = 2019 - 1900;
-//    _start_date->tm_mon = 0;
-//    _start_date->tm_mday = 1;
-//    _start_date->tm_hour = 1;
-//    _start_date->tm_min = 0;
-//    _start_date->tm_sec = 0;
-//    mktime ( _start_date );
+    _start_date = localtime ( &_rawtime );
+    _start_date->tm_year = 2019 - 1900;
+    _start_date->tm_mon = 0;
+    _start_date->tm_mday = 1;
+    _start_date->tm_hour = 1;
+    _start_date->tm_min = 0;
+    _start_date->tm_sec = 0;
+    mktime ( _start_date );
 //    time ( &_loadrawtime );
 //    _demand_start_date = localtime ( &_loadrawtime );
 //    _demand_start_date->tm_year = 2019 - 1900;
@@ -1689,7 +1699,8 @@ int PowerNet::readODO(const string& fname){
         DebugOn("month = " << to_string(month) << endl);
         int year = tstamp.year;
         DebugOn("year = " << to_string(year) << endl);
-        int hour = round(tstamp.hour + tstamp.minute*1./60.);
+        int hour = std::min(23,(int)round(tstamp.hour + tstamp.minute*1./60.));
+        assert(hour<24 && hour >=0);
         DebugOn("hour = " << to_string(hour) << endl);
 //        _demand_start_date->tm_year = year - 1900;
 //        _demand_start_date->tm_mon = month-1;
@@ -1697,10 +1708,12 @@ int PowerNet::readODO(const string& fname){
 //        _demand_start_date->tm_hour = hour;
 //        mktime ( _demand_start_date );
 //        DebugOn("Historical load data start time is: " << asctime(_demand_start_date));
-        auto col_it = ws.columns().begin();
+        auto col_start = ws.columns().begin();
+        auto col_end = ws.columns().end();
+        auto col_it = col_start;
         col_it++;
         Cpx load;
-        while (col_it!=ws.columns().end()) {
+        while (col_it!=col_end) {
             auto col = *col_it++;
             auto load_name = col[0].value<string>();
             auto phase = stoi(load_name.substr(load_name.size()-1));
@@ -1714,8 +1727,8 @@ int PowerNet::readODO(const string& fname){
             l->_phases.insert(phase);
             l->_val[{year,month,day,hour}] = load;
         }
-        
-        while (row_it!=ws.rows().end()) {
+        auto rows_end = ws.rows().end();
+        while (row_it!=rows_end) {
             row = *row_it++;
             row_id++;
             tstamp = row[0].value<xlnt::datetime>();
@@ -1725,8 +1738,9 @@ int PowerNet::readODO(const string& fname){
             DebugOff("month = " << to_string(month) << endl);
             year = tstamp.year;
             DebugOff("year = " << to_string(year) << endl);
-            hour = round(tstamp.hour + tstamp.minute*1./60.);
+            hour = std::min(23,(int)round(tstamp.hour + tstamp.minute*1./60.));
             DebugOff("hour = " << to_string(hour) << endl);
+            assert(hour<24 && hour >=0);
 //            auto _date = tm();
 //            _date.tm_year = tstamp.year - 1900;
 //            _date.tm_mon = tstamp.month-1;
@@ -1735,9 +1749,9 @@ int PowerNet::readODO(const string& fname){
 //            mktime ( &_date );
             
 //            DebugOff("Time stamp: " << asctime(&_date) << endl);
-            col_it = ws.columns().begin();
+            col_it = col_start;
             col_it++;
-            while (col_it!=ws.columns().end()) {
+            while (col_it!=col_end) {
                 auto col = *col_it++;
                 auto load_name = col[0].value<string>();
                 auto phase = stoi(load_name.substr(load_name.size()-1));

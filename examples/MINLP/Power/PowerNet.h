@@ -268,6 +268,8 @@ public:
     /** Power grid data parser from DERCAM*/
     int readDERCAM(const string& fname);
     
+    bool is_weekend(const tuple<int,int,int,int>& ymdh);
+    
     /** Use the time series data to compute averages for typical days */
     void compute_loads();
     
