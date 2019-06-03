@@ -33,15 +33,7 @@
 using namespace std;
 using namespace rapidjson;
 
-bool PowerNet::is_weekend(const tuple<int,int,int,int>& ymdh){
 
-    _start_date->tm_year = get<0>(ymdh) - 1900;
-    _start_date->tm_mon = get<1>(ymdh)-1;
-    _start_date->tm_mday = get<2>(ymdh);
-    mktime ( _start_date );
-    return (_start_date->tm_wday==0 || _start_date->tm_wday==6);
-//    return (get<2>(ymdh)==1 || get<2>(ymdh)==2);
-}
 
 PowerNet::PowerNet() {
     time ( &_rawtime );
@@ -1682,7 +1674,7 @@ int PowerNet::readODO(const string& fname){
         ws = wb.sheet_by_title("LoadTimeSeries");
     }
     catch(xlnt::key_not_found err) {
-        found_WindVariance = false;
+        found_LoadData = false;
         cerr << "Cannot find sheet LoadTimeSeries, setting all loads to 0." << endl;
     }
     if(found_LoadData){
@@ -1770,6 +1762,57 @@ int PowerNet::readODO(const string& fname){
         }
         compute_loads();
     }
+    
+    bool found_ResiliencyData = true;
+    try{
+        ws = wb.sheet_by_title("ResiliencyScenarios");
+    }
+    catch(xlnt::key_not_found err) {
+        found_ResiliencyData = false;
+        cerr << "Cannot find sheet ResiliencyScenarios, no resiliency scenarios considered." << endl;
+    }
+    if(found_ResiliencyData){
+        clog << "Processing ResiliencyScenarios" << std::endl;
+        size_t row_id = 0;
+        row_it = ws.rows().begin();
+        row_it++;//SKIP FRIST ROW
+        auto rows_end = ws.rows().end();
+        while (row_it!=rows_end) {
+            auto row = *row_it++;
+            auto name = row[0].to_string();
+            row_id++;
+            auto nb_hours = row[1].value<int>();
+            auto scen = make_shared<Scenario>(name,nb_hours);
+            _res_scenarios[name] = scen;
+            auto col_start = row.begin();
+            auto col_end = row.end();
+            auto col_it = col_start;
+            col_it++;col_it++;
+            while (col_it!=col_end) {
+                auto col = *col_it++;
+                auto conting_name = col.to_string();
+                auto conting_type = conting_name.substr(0,conting_name.find_first_of("_"));
+                if(conting_type=="branch"){
+                    auto br = conting_name.substr(conting_name.find_first_of("_")+1);
+                    auto src = br.substr(0,br.find_first_of("_"));
+                    auto dest = br.substr(br.find_first_of("_")+1);
+                    auto arc = get_arc(src, dest);
+                    scen->_out_arcs.push_back(arc);
+                }
+                else if(conting_type=="gen"){
+                    int gen_id = stoi(conting_name.substr(conting_name.find_first_of("_")+1));
+                    auto gen = gens.at(gen_id);
+                    scen->_out_gens.push_back(gen);
+                }
+                else {
+                    throw invalid_argument("unsupported contingency type, use branch_srcId_desId or gen_busId");
+                }
+            }
+        }
+    }
+
+    
+    
     
     
     string key;
@@ -2875,7 +2918,9 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     ODO->add(State_Of_Charge.in(Bt1) == 0);
 
     /*  State Of Charge 0 */
-    auto Bat0 = indices(indices(T.first()),B_ph);
+    auto T0 = indices("T0");
+    T0.insert(T.first());
+    auto Bat0 = indices(T0,B_ph);
     Constraint<> State_Of_Charge0("State_Of_Charge0");
     State_Of_Charge0 = Sc.in(Bat0);
     ODO->add(State_Of_Charge0.in(Bat0) == 0);

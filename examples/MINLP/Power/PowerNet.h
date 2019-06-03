@@ -47,6 +47,16 @@ public:
     unsigned _lifetime;
 };
 
+/** @brief Resiliency Scenarios */
+class Scenario{
+public:
+    string _name;
+    int _nb_hours;
+    vector<aux*> _out_gens;
+    vector<Arc*> _out_arcs;
+    Scenario(const string& name, int nb_hours):_name(name), _nb_hours(nb_hours){};
+};
+
 /** @brief A Month has a name, belongs to a given season and has stats on the number of week/weekends and peak days*/
 class Month{
 public:
@@ -89,15 +99,11 @@ class PowerNet: public Net {
 
 public:
     /**Date represented as a tuple <Year,Month,Day,hour>*/
-    
     time_t                                                              _rawtime;
-    time_t                                                              _loadrawtime;
-    struct tm*                                                          _start_date;// First time stamp in simulation
-    struct tm*                                                          _demand_start_date;// First time stamp in historical demand data
-    struct tm*                                                          _irrad_start_date;// First time stamp in historical irradiance data
-    struct tm*                                                          _wind_start_date;// First time stamp in historical wind speed data
+    struct tm*                                                          _start_date;/**< First time stamp in simulation */
 
     map<string, Node*>                                                  _load_map;
+    map<string, shared_ptr<Scenario>>                                   _res_scenarios;/**< Resiliency scenarios */
     size_t _max_it = 10000;
     size_t _max_time = 3600;
     double  _tol = 1e-6;
@@ -268,7 +274,6 @@ public:
     /** Power grid data parser from DERCAM*/
     int readDERCAM(const string& fname);
     
-    bool is_weekend(const tuple<int,int,int,int>& ymdh);
     
     /** Use the time series data to compute averages for typical days */
     void compute_loads();

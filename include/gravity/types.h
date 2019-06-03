@@ -617,19 +617,22 @@ namespace gravity{
         
         void remove_excluded(){
             _ids = nullptr;
-            map<string,size_t> new_keys_map;
+            auto new_keys_map = make_shared<map<string,size_t>>();
             for(auto &key_id: _excluded_keys){
                 auto key = _keys->at(key_id);
                 _keys_map->erase(key);
             }
-            _keys->clear();
-            _keys->resize(_keys_map->size());
-            size_t idx = 0;
-            for(auto &key_id: *_keys_map){
-                _keys->at(idx) = key_id.first;
-                new_keys_map[key_id.first] = idx++;
+            auto new_keys = make_shared<vector<string>>();
+            new_keys->resize(_keys_map->size());
+            size_t new_idx = 0;
+            for(auto idx = 0; idx < _keys->size(); idx++){
+                if(_excluded_keys.count(idx)==0){
+                    new_keys->at(new_idx) = _keys->at(idx);
+                    (*new_keys_map)[_keys->at(idx)] = new_idx++;
+                }
             }
-            *_keys_map = new_keys_map;
+            _keys_map = new_keys_map;
+            _keys = new_keys;
             _excluded_keys.clear();
             _dim->resize(1);
             _dim->at(0) = _keys->size();

@@ -171,7 +171,7 @@ int main (int argc, char * argv[])
     DebugOn("number of buses = " << Nbus << endl);
 
     auto ODO = grid.build_ODO_model(pmt,output,tol,max_nb_hours);
-//    ODO->print();
+    ODO->print();
 //    return 0;
     
     

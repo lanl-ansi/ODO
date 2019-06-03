@@ -4,7 +4,15 @@
 using namespace std;
 using namespace gravity;
 
-
+bool gravity::is_weekend(const tuple<int,int,int,int>& ymdh){
+    std::time_t t = std::time(nullptr);
+    std::tm timeinfo = *std::localtime(&t);
+    timeinfo.tm_year = get<0>(ymdh) - 1900;
+    timeinfo.tm_mon = get<1>(ymdh)-1;
+    timeinfo.tm_mday = get<2>(ymdh);
+    mktime ( &timeinfo );
+    return (timeinfo.tm_wday==0 || timeinfo.tm_wday==6);
+}
 
 
 int gravity::get_nb_days_in_month(const tm& timeinfo){
