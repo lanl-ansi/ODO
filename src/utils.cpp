@@ -5,8 +5,8 @@ using namespace std;
 using namespace gravity;
 
 bool gravity::is_weekend(const tuple<int,int,int,int>& ymdh){
-    std::time_t t = std::time(nullptr);
-    std::tm timeinfo = *std::localtime(&t);
+    time_t t = time(nullptr);
+    tm timeinfo = *localtime(&t);
     timeinfo.tm_year = get<0>(ymdh) - 1900;
     timeinfo.tm_mon = get<1>(ymdh)-1;
     timeinfo.tm_mday = get<2>(ymdh);
