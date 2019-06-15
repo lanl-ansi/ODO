@@ -1461,7 +1461,7 @@ namespace gravity {
                         }
                         auto it1 = _indices->_keys_map->find(key);
                         if (it1 == _indices->_keys_map->end()){
-                            throw invalid_argument("In function param.in(const vector<Tobj>& vec), vec has unknown key");
+                            throw invalid_argument("In function param.in(const vector<Tobj>& vec), vec has unknown key: " + key);
                         }
                         res._indices->_ids->at(inst).at(idx) = it1->second;
                     }

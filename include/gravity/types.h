@@ -647,7 +647,86 @@ namespace gravity{
             }
         }
         
-        indices exclude(string key){
+        /** Exclude the last key that contains a key in each scenario  */
+        indices exclude_last_each(const indices& scenarios) const{
+            auto res =  *this;
+            res._keys_map = make_shared<map<string,size_t>>(*_keys_map);
+            res._keys = make_shared<vector<string>>(*_keys);
+            size_t last = 0;
+            for (auto &scen:*scenarios._keys_map) {
+                for (auto &pkey:*_keys_map) {
+                    if(pkey.first.find(scen.first)!=std::string::npos){
+                        last = pkey.second;
+                    }
+                }
+                res._excluded_keys.insert(last);
+            }
+            
+            //            if(!is_indexed()){
+            //                res._ids = make_shared<vector<vector<size_t>>>();
+            //                res._ids->resize(1);
+            //            }
+            //            res.reindex();
+            res._name += "\\last_each_"+scenarios._name;
+            res.remove_excluded();
+            return res;
+        }
+        
+        /** Exclude the first key that contains a key in each scenario  */
+        indices exclude_first_each(const indices& scenarios) const{
+            auto res =  *this;
+            res._keys_map = make_shared<map<string,size_t>>(*_keys_map);
+            res._keys = make_shared<vector<string>>(*_keys);
+            for (auto &scen:*scenarios._keys_map) {
+                for (auto &pkey:*_keys_map) {
+                    if(pkey.first.find(scen.first)!=std::string::npos){
+                        res._excluded_keys.insert(pkey.second);
+                        break;
+                    }
+                }
+            }
+            res._name += "\\first_each_"+scenarios._name;
+            res.remove_excluded();
+            return res;
+        }
+        
+        /** Get the first key that contains a key in each scenario  */
+        indices first_each(const indices& scenarios) const{
+            auto res =  indices("first_each("+scenarios._name+")");
+            for (auto &scen:*scenarios._keys_map) {
+                for (auto &pkey:*_keys_map) {
+                    if(pkey.first.find(scen.first)!=std::string::npos){
+                        res.add(pkey.first);
+                        break;
+                    }
+                }
+            }
+            return res;
+        }
+        
+        
+        /** Excllude all keys that has key as a substring */
+        indices exclude_sub(string key) const{
+            auto res =  *this;
+            res._keys_map = make_shared<map<string,size_t>>(*_keys_map);
+            res._keys = make_shared<vector<string>>(*_keys);
+            for (auto &pkey:*_keys_map) {
+                if(pkey.first.find(key)!=std::string::npos){
+                    res._excluded_keys.insert(pkey.second);
+                }
+            }
+            
+            //            if(!is_indexed()){
+            //                res._ids = make_shared<vector<vector<size_t>>>();
+            //                res._ids->resize(1);
+            //            }
+            //            res.reindex();
+            res._name += "\\{" + key+"}";
+            res.remove_excluded();
+            return res;
+        }
+        
+        indices exclude(string key) const{
             auto res =  *this;
             res._keys_map = make_shared<map<string,size_t>>(*_keys_map);
             res._keys = make_shared<vector<string>>(*_keys);
