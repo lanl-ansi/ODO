@@ -116,7 +116,7 @@ public:
     string _type_name="Load";
     
     map<tuple<int,int,int,int>,Cpx>                                     _val;
-    int                                                                 _critical_level;
+    int                                                                 _critical_level = 0;
     
     Load(){};
     Load(string name, int critical_level): _critical_level(critical_level){
@@ -293,6 +293,8 @@ public:
     /** @brief Enable PV generation at this node */
     bool _enable_PV = false;
     
+    /** @brief level of loads criticality attached to current bus */
+    int _critical_level = 0;
     
     /** @brief Data on discrete investment per technology type , e.g., diesel generators min/max/existing numbers */
     map<unsigned,DieselData> _diesel_data;

@@ -229,7 +229,7 @@ public:
     indices typical_days = time("week","peak","weekend");
 //    typical_days._name = "typical_days";
     //    indices typical_days = time("week");
-    indices phase_T, T= indices("Time"), Nt = indices("Nt"), Nt_c = indices("Nt_c"), Lt = indices("Lt"), Nt_load, Nt_no_load, Et = indices("Et"),Et_c = indices("Et_c"), Et1 = indices("Et1"), Et2 = indices("Et2"), Et3 = indices("Et3"), Et1_c = indices("Et1_c"), Et2_c = indices("Et2_c"), Et3_c = indices("Et3_c"), pot_G_ph = indices("pot_Gph"), pot_Wind_ph = indices("pot_Wind_ph"), pot_PV_ph = indices("pot_PVph"), pot_E_ph = indices("pot_Eph"), pot_B_ph = indices("pot_Bph"), G_ph= indices("Gph"),Wind_ph= indices("Wph"),PV_ph= indices("PVph"), N_ph= indices("Nph"), exist_G_ph = indices("Exist_Gph"),exist_PV_ph = indices("Exist_PVph"),exist_Wind_ph = indices("Exist_Wind_ph"), exist_B_ph = indices("Exist_Bph"), B_ph = indices("Bph"), exist_E_ph = indices("Exist_Eph"), E_ph = indices("Eph"), E_ph1 = indices("Eph1"),E_ph2 = indices("Eph2"), E_ph3 = indices("Eph3"), E_ph1_c = indices("Eph1_c"),E_ph2_c = indices("Eph2_c"), E_ph3_c = indices("Eph3_c"), Gt = indices("Gt"),Gt_c = indices("Gt_c"), PVt = indices("PVt"), PVt_c = indices("PVt_c"), Windt = indices("Windt"), Windt_c = indices("Windt_c"), exist_Gt= indices("exit_Gt"), exist_PVt= indices("exit_PVt"), exist_Windt= indices("exit_Windt"), exist_Bt= indices("exit_Bt"), exist_Et= indices("exit_Et"), pot_Et= indices("pot_Et"), pot_PVt= indices("pot_PVt"),pot_Windt= indices("pot_Windt"), pot_Gt= indices("pot_Gt"), pot_Bt= indices("pot_Bt"), Bt = indices("Bt"), Bt_c = indices("Bt_c"), Btn = indices("Btn"), Bt1 = indices("Bt1"), Gt1, Wt, PV_pot_t, pot_gen, pot_batt, pot_edges, pot_pv;
+    indices phase_T, T= indices("Time"), T_c= indices("Time_c"), Nt = indices("Nt"), Nt_c = indices("Nt_c"), Lt = indices("Lt"), Nt_load, Nt_no_load, Et = indices("Et"),Et_c = indices("Et_c"), Et1 = indices("Et1"), Et2 = indices("Et2"), Et3 = indices("Et3"), Et1_c = indices("Et1_c"), Et2_c = indices("Et2_c"), Et3_c = indices("Et3_c"), pot_G_ph = indices("pot_Gph"), pot_Wind_ph = indices("pot_Wind_ph"), pot_PV_ph = indices("pot_PVph"), pot_E_ph = indices("pot_Eph"), pot_B_ph = indices("pot_Bph"), G_ph= indices("Gph"),Wind_ph= indices("Wph"),PV_ph= indices("PVph"), N_ph= indices("Nph"), exist_G_ph = indices("Exist_Gph"),exist_PV_ph = indices("Exist_PVph"),exist_Wind_ph = indices("Exist_Wind_ph"), exist_B_ph = indices("Exist_Bph"), B_ph = indices("Bph"), exist_E_ph = indices("Exist_Eph"), E_ph = indices("Eph"), E_ph1 = indices("Eph1"),E_ph2 = indices("Eph2"), E_ph3 = indices("Eph3"), E_ph1_c = indices("Eph1_c"),E_ph2_c = indices("Eph2_c"), E_ph3_c = indices("Eph3_c"), Gt = indices("Gt"),Gt_c = indices("Gt_c"), PVt = indices("PVt"), PVt_c = indices("PVt_c"), Windt = indices("Windt"), Windt_c = indices("Windt_c"), exist_Gt= indices("exit_Gt"), exist_PVt= indices("exit_PVt"), exist_Windt= indices("exit_Windt"), exist_Bt= indices("exit_Bt"), exist_Et= indices("exit_Et"), pot_Et= indices("pot_Et"), pot_PVt= indices("pot_PVt"),pot_Windt= indices("pot_Windt"), pot_Gt= indices("pot_Gt"), pot_Bt= indices("pot_Bt"), Bt = indices("Bt"), Bt_c = indices("Bt_c"), Btn = indices("Btn"), Bt1 = indices("Bt1"), Gt1, Wt, PV_pot_t, pot_gen, pot_batt, pot_edges, pot_pv;
     indices Et_opt, Gt_opt, Bt_opt, Bt1_opt, Wt_opt, PVt_opt;
     indices cross_phase = indices("cross_phase");
     indices N_ph1 = indices("Nph1"),N_ph2 = indices("Nph2"), N_ph3 = indices("Nph3");
@@ -302,6 +302,7 @@ public:
     indices get_conting_buses(const map<string,shared_ptr<Scenario>>& conts) const;
     indices get_conting_arcs(const map<string,shared_ptr<Scenario>>& conts) const;
     indices get_conting_gens(const map<string,shared_ptr<Scenario>>& conts) const;
+    indices get_conting_nodes(const map<string,shared_ptr<Scenario>>& conts) const;
     indices get_conting_arcs_pot(const map<string,shared_ptr<Scenario>>& conts) const;
     indices get_conting_gens_pot(const map<string,shared_ptr<Scenario>>& conts) const;
     indices get_conting_arcs_exist(const map<string,shared_ptr<Scenario>>& conts) const;
@@ -331,6 +332,7 @@ public:
     
     vector<param<>> signs();
     
+    indices get_critical(int level) const;/**< Get indices of nodes with critical loads corresopnding to the level specified or higher */
     indices get_all_conting(const map<string,shared_ptr<Scenario>>& scenarios) const;
     indices get_time_ids_conting(const map<string,shared_ptr<Scenario>>& scenarios) const;
     

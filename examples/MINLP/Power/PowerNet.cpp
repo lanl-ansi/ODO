@@ -969,6 +969,54 @@ indices PowerNet::get_conting_gens_pot(const map<string,shared_ptr<Scenario>>& c
     return ids;
 }
 
+indices PowerNet::get_conting_nodes(const map<string,shared_ptr<Scenario>>& conts) const{
+    indices ids("nodes_cont");
+    for (auto &sc_p: conts) {
+        auto year_month_day_hour = sc_p.second->_year_month_day_hour;
+        auto h0 = get<3>(sc_p.second->_year_month_day_hour);
+        auto nb_hours = sc_p.second->_nb_hours;
+        string start_day_type = "week";
+        if(is_weekend(year_month_day_hour)){
+            start_day_type = "weekend";
+        }
+        string day_type = start_day_type;
+        auto cont_key = sc_p.first;
+        for (auto h = 0; h<nb_hours; h++) {
+            int hour = (h0+h)%24;
+            if((h+h0)%72>=48 && start_day_type=="week"){
+                day_type = "weekend";
+            }
+            else if((h+h0)%72>=48 && start_day_type=="weekend"){
+                day_type = "week";
+            }
+            else if((h+h0)%72>=24){
+                day_type = "peak";
+            }
+            auto time_stamp = "year"+to_string(get<0>(sc_p.second->_year_month_day_hour)-2018)+",";
+            auto season_str = _months_season.at((get<1>(sc_p.second->_year_month_day_hour) + (h+h0)/72)%_months_season.size()); /* < change season every 72 hours */
+            time_stamp += season_str +","+day_type+","+to_string(hour+1);
+            for (auto n: nodes) {
+                bool isolated = true;
+                for (auto a:n->branches) {
+                    if(conts.at(sc_p.first)->_out_arcs.count(a->_name)==0){
+                        isolated = false;
+                        break;
+                    }
+                }
+                if(!isolated){
+                    for (auto i = 0; i<3; i++) {
+                        if(n->_phases.count(i+1)!=0){
+                            auto ph_key = "ph"+to_string(i+1)+","+n->_name;
+                            ids.insert(sc_p.first+","+time_stamp+","+ph_key);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return ids;
+}
+
 
 indices PowerNet::get_conting_gens(const map<string,shared_ptr<Scenario>>& conts) const{
     indices ids("gens_cont");
@@ -1198,6 +1246,19 @@ indices PowerNet::get_conting_arcs_pot(const map<string,shared_ptr<Scenario>>& c
         }
     }
     return ids;
+}
+
+indices PowerNet::get_critical(int level) const{/**< Get indices of nodes with critical loads corresopnding to the level specified or higher */
+    indices critical("critical");
+    for (auto n:nodes) {
+        if(((Bus*)n)->_critical_level>= level){
+            for(auto const &i: n->_phases){
+                auto ph_key = "ph"+to_string(i)+","+n->_name;
+                critical.add(ph_key);
+            }
+        }
+    }
+    return critical;
 }
 
 indices PowerNet::get_all_conting(const map<string,shared_ptr<Scenario>>& scenarios) const{
@@ -3060,6 +3121,7 @@ void PowerNet::readJSON(const string& fname){
         auto load_name = list["name"].GetString();
         auto critical = list["critical"].GetInt();
         auto bus = (Bus*)get_node(to_string(lbus));
+        bus->_critical_level = std::max(bus->_critical_level, critical);
         for(auto ph=1; ph<=3; ph++){
             auto key = "ph"+to_string(ph) +","+string(load_name);
             _load_map[key] = bus;
@@ -3785,6 +3847,7 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     double nT = T.size();
     DebugOn("number of time periods = " << nT << endl);
     Nt = indices(T,N_ph);
+    Nt_c = get_conting_nodes(_res_scenarios);
     Et = indices(T,E_ph);
     Et1 = indices(T,E_ph1);
     Et2 = indices(T,E_ph2);
@@ -3803,6 +3866,10 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     pot_PVt = indices(T,pot_PV_ph);
     pot_Windt = indices(T,pot_Wind_ph);
     Bt = indices(T,B_ph);
+    
+    T_c = get_time_ids_conting(_res_scenarios);
+
+    
     /** Sets */
     auto bus_pairs = this->get_bus_pairs();
     auto gen_nodes = this->gens_per_node_time();
@@ -4021,6 +4088,10 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     S_to3 = Sji - (conj(Y0)+conj(Yc_to))*Vto*conj(Vto) + conj(Y0)*Vto*conj(Vfr) - (conj(Y3)*Vj)*(conj(Vj3) - conj(Vi3));
     ODO->add(S_fr3.in(Et3)==0);
     ODO->add(S_to3.in(Et3)==0);
+    
+    var<> pls("pls", 0, 1);/**< percentage of real load shed */
+    var<> qls("qls", 0, 1);/**< percentage of reactive load shed */
+    ODO->add(pls.in(Nt_c), qls.in(Nt_c));
 //        ODO->print();
 //        exit(-1);
 //
@@ -4055,6 +4126,7 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     obj += 1e-3*product(expansion_capcost.in(pot_E_ph), w_e);
     obj += 1e-3*product(pv_capcost.in(pot_PV_ph), w_pv);
     obj += 1e-3*product(pv_varcost.in(pot_PV_ph), Pv_cap);
+    obj += 1e2*(sum(pls) + sum(qls));
     ODO->min(obj);
 //    obj += sum(Pg);
 //    ODO->min(sum(Pg));
@@ -4296,14 +4368,13 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
         auto scenarios = get_all_conting(_res_scenarios);
         Gt_c = get_conting_gens(_res_scenarios);
         Et_c = get_conting_arcs(_res_scenarios);
-        auto T_c = get_time_ids_conting(_res_scenarios);
-        Nt_c = indices(T_c,N_ph);
         PVt_c = indices(T_c, PV_ph);
         Bt_c = indices(T_c, B_ph);
         Windt_c = indices(T_c, Wind_ph);
         Et1_c = get_phase(Et_c,1);
         Et2_c = get_phase(Et_c,2);
         Et3_c = get_phase(Et_c,3);
+        
         
         auto gen_nodes_c = this->gens_per_node_time_cont(_res_scenarios);
         auto batt_nodes_c = this->Batt_per_node_time_cont();
@@ -4357,6 +4428,8 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
         DebugOff("size Pij_c = " << Pij_c.get_dim() << endl);
         
         /** Voltage magnitude variables */
+        
+        
         var<> vr_c("vr_c", -1*v_max.in(Nt_c),v_max.in(Nt_c));
         var<> vi_c("vi_c", -1*v_max.in(Nt_c),v_max.in(Nt_c));
         
@@ -4410,83 +4483,85 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
         auto to_ph2_c = to_branch_phase(2,true);
         auto to_ph3_c = to_branch_phase(3,true);
         
-        /** Power Flows */
-        param<Cpx> Y0_c("Y0_c"), Y1_c("Y1_c"), Y2_c("Y2_c"), Y3_c("Y3_c");
-        param<Cpx> Yc_fr_c("Yc_fr_c"), Yc_to_c("Yc_to_c");/* Line charging */
-        var<Cpx> Vfr_c("Vfr_c"), Vto_c("Vto_c");
-        var<Cpx> Sij_c("Sij_c"), Sji_c("Sji_c"), Vi_c("Vi_c"), Vj_c("Vj_c"), Vi1_c("Vi1_c"), Vi2_c("Vi2_c"), Vi3_c("Vi3_c"), Vj1_c("Vj1_c"), Vj2_c("Vj2_c"), Vj3_c("Vj3_c");
-        /* Phase 1 */
-        Yc_fr_c.real_imag(g_fr_.in(Et1_c),b_fr_.in(Et1_c));
-        Yc_to_c.real_imag(g_to_.in(Et1_c),b_to_.in(Et1_c));
-        Y0_c.real_imag(g.in(branch_id_ph1_c),b.in(branch_id_ph1_c));
-        Y1_c.real_imag(g.in(branch_ph1_c),b.in(branch_ph1_c));
-        if(pmt==ACRECT){
-            Vfr_c.real_imag(vr_fr1_c,vi_fr1_c);
-            Vto_c.real_imag(vr_to1_c,vi_to1_c);
-            Vi_c.real_imag(vr_c.in(ref_from_ph1_c),vi_c.in(ref_from_ph1_c));
-            Vj_c.real_imag(vr_c.in(ref_to_ph1_c),vi_c.in(ref_to_ph1_c));
-            Vi1_c.real_imag(vr_c.in(from_ph1_c),vi_c.in(from_ph1_c));
-            Vj1_c.real_imag(vr_c.in(to_ph1_c),vi_c.in(to_ph1_c));
+        bool add_AC_Flow = true;
+        if(add_AC_Flow){
+            /** Power Flows */
+            param<Cpx> Y0_c("Y0_c"), Y1_c("Y1_c"), Y2_c("Y2_c"), Y3_c("Y3_c");
+            param<Cpx> Yc_fr_c("Yc_fr_c"), Yc_to_c("Yc_to_c");/* Line charging */
+            var<Cpx> Vfr_c("Vfr_c"), Vto_c("Vto_c");
+            var<Cpx> Sij_c("Sij_c"), Sji_c("Sji_c"), Vi_c("Vi_c"), Vj_c("Vj_c"), Vi1_c("Vi1_c"), Vi2_c("Vi2_c"), Vi3_c("Vi3_c"), Vj1_c("Vj1_c"), Vj2_c("Vj2_c"), Vj3_c("Vj3_c");
+            /* Phase 1 */
+            Yc_fr_c.real_imag(g_fr_.in(Et1_c),b_fr_.in(Et1_c));
+            Yc_to_c.real_imag(g_to_.in(Et1_c),b_to_.in(Et1_c));
+            Y0_c.real_imag(g.in(branch_id_ph1_c),b.in(branch_id_ph1_c));
+            Y1_c.real_imag(g.in(branch_ph1_c),b.in(branch_ph1_c));
+            if(pmt==ACRECT){
+                Vfr_c.real_imag(vr_fr1_c,vi_fr1_c);
+                Vto_c.real_imag(vr_to1_c,vi_to1_c);
+                Vi_c.real_imag(vr_c.in(ref_from_ph1_c),vi_c.in(ref_from_ph1_c));
+                Vj_c.real_imag(vr_c.in(ref_to_ph1_c),vi_c.in(ref_to_ph1_c));
+                Vi1_c.real_imag(vr_c.in(from_ph1_c),vi_c.in(from_ph1_c));
+                Vj1_c.real_imag(vr_c.in(to_ph1_c),vi_c.in(to_ph1_c));
+            }
+            Sij_c.real_imag(Pij1_c,Qij1_c);
+            Sji_c.real_imag(Pji1_c,Qji1_c);
+            
+            
+            Constraint<Cpx> S_fr1_c("S_fr1_c"), S_to1_c("S_to1_c");
+            S_fr1_c = Sij_c - (conj(Y0_c)+conj(Yc_fr_c))*Vfr_c*conj(Vfr_c) + conj(Y0_c)*Vfr_c*conj(Vto_c) - (conj(Y1_c)*Vi_c)*(conj(Vi1_c) - conj(Vj1_c));
+            S_to1_c = Sji_c - (conj(Y0_c)+conj(Yc_to_c))*Vto_c*conj(Vto_c) + conj(Y0_c)*Vto_c*conj(Vfr_c) - (conj(Y1_c)*Vj_c)*(conj(Vj1_c) - conj(Vi1_c));
+            ODO->add(S_fr1_c.in(Et1_c)==0);
+            ODO->add(S_to1_c.in(Et1_c)==0);
+            /* Phase 2 */
+            Yc_fr_c.real_imag(g_fr_.in(Et2_c),b_fr_.in(Et2_c));
+            Yc_to_c.real_imag(g_to_.in(Et2_c),b_to_.in(Et2_c));
+            Y0_c.real_imag(g.in(branch_id_ph2_c),b.in(branch_id_ph2_c));
+            Y2_c.real_imag(g.in(branch_ph2_c),b.in(branch_ph2_c));
+            
+            if(pmt==ACRECT){
+                Vfr_c.real_imag(vr_fr2_c,vi_fr2_c);
+                Vto_c.real_imag(vr_to2_c,vi_to2_c);
+                Vi_c.real_imag(vr_c.in(ref_from_ph2_c),vi_c.in(ref_from_ph2_c));
+                Vj_c.real_imag(vr_c.in(ref_to_ph2_c),vi_c.in(ref_to_ph2_c));
+                Vi2_c.real_imag(vr_c.in(from_ph2_c),vi_c.in(from_ph2_c));
+                Vj2_c.real_imag(vr_c.in(to_ph2_c),vi_c.in(to_ph2_c));
+            }
+            
+            Sij_c.real_imag(Pij2_c,Qij2_c);
+            Sji_c.real_imag(Pji2_c,Qji2_c);
+            Constraint<Cpx> S_fr2_c("S_fr2_c"), S_to2_c("S_to2_c");
+            S_fr2_c = Sij_c - (conj(Y0_c)+conj(Yc_fr_c))*Vfr_c*conj(Vfr_c) + conj(Y0_c)*Vfr_c*conj(Vto_c) - (conj(Y2_c)*Vi_c)*(conj(Vi2_c) - conj(Vj2_c));
+            S_to2_c = Sji_c - (conj(Y0_c)+conj(Yc_to_c))*Vto_c*conj(Vto_c) + conj(Y0_c)*Vto_c*conj(Vfr_c) - (conj(Y2_c)*Vj_c)*(conj(Vj2_c) - conj(Vi2_c));
+            ODO->add(S_fr2_c.in(Et2_c)==0);
+            ODO->add(S_to2_c.in(Et2_c)==0);
+            /* Phase 3 */
+            Yc_fr_c.real_imag(g_fr_.in(Et3_c),b_fr_.in(Et3_c));
+            Yc_to_c.real_imag(g_to_.in(Et3_c),b_to_.in(Et3_c));
+            Y0_c.real_imag(g.in(branch_id_ph3_c),b.in(branch_id_ph3_c));
+            Y3_c.real_imag(g.in(branch_ph3_c),b.in(branch_ph3_c));
+            if(pmt==ACRECT){
+                Vfr_c.real_imag(vr_fr3_c,vi_fr3_c);
+                Vto_c.real_imag(vr_to3_c,vi_to3_c);
+                Vi_c.real_imag(vr_c.in(ref_from_ph3_c),vi_c.in(ref_from_ph3_c));
+                Vj_c.real_imag(vr_c.in(ref_to_ph3_c),vi_c.in(ref_to_ph3_c));
+                Vi3_c.real_imag(vr_c.in(from_ph3_c),vi_c.in(from_ph3_c));
+                Vj3_c.real_imag(vr_c.in(to_ph3_c),vi_c.in(to_ph3_c));
+            }
+            
+            Sij_c.real_imag(Pij3_c,Qij3_c);
+            Sji_c.real_imag(Pji3_c,Qji3_c);
+            Constraint<Cpx> S_fr3_c("S_fr3_c"), S_to3_c("S_to3_c");
+            S_fr3_c = Sij_c - (conj(Y0_c)+conj(Yc_fr_c))*Vfr_c*conj(Vfr_c) + conj(Y0_c)*Vfr_c*conj(Vto_c) - (conj(Y3_c)*Vi_c)*(conj(Vi3_c) - conj(Vj3_c));
+            S_to3_c = Sji_c - (conj(Y0_c)+conj(Yc_to_c))*Vto_c*conj(Vto_c) + conj(Y0_c)*Vto_c*conj(Vfr_c) - (conj(Y3_c)*Vj_c)*(conj(Vj3_c) - conj(Vi3_c));
+            ODO->add(S_fr3_c.in(Et3_c)==0);
+            ODO->add(S_to3_c.in(Et3_c)==0);
         }
-        Sij_c.real_imag(Pij1_c,Qij1_c);
-        Sji_c.real_imag(Pji1_c,Qji1_c);
-        
-        
-        Constraint<Cpx> S_fr1_c("S_fr1_c"), S_to1_c("S_to1_c");
-        S_fr1_c = Sij_c - (conj(Y0_c)+conj(Yc_fr_c))*Vfr_c*conj(Vfr_c) + conj(Y0_c)*Vfr_c*conj(Vto_c) - (conj(Y1_c)*Vi_c)*(conj(Vi1_c) - conj(Vj1_c));
-        S_to1_c = Sji_c - (conj(Y0_c)+conj(Yc_to_c))*Vto_c*conj(Vto_c) + conj(Y0_c)*Vto_c*conj(Vfr_c) - (conj(Y1_c)*Vj_c)*(conj(Vj1_c) - conj(Vi1_c));
-        ODO->add(S_fr1_c.in(Et1_c)==0);
-        ODO->add(S_to1_c.in(Et1_c)==0);
-        /* Phase 2 */
-        Yc_fr_c.real_imag(g_fr_.in(Et2_c),b_fr_.in(Et2_c));
-        Yc_to_c.real_imag(g_to_.in(Et2_c),b_to_.in(Et2_c));
-        Y0_c.real_imag(g.in(branch_id_ph2_c),b.in(branch_id_ph2_c));
-        Y2_c.real_imag(g.in(branch_ph2_c),b.in(branch_ph2_c));
-        
-        if(pmt==ACRECT){
-            Vfr_c.real_imag(vr_fr2_c,vi_fr2_c);
-            Vto_c.real_imag(vr_to2_c,vi_to2_c);
-            Vi_c.real_imag(vr_c.in(ref_from_ph2_c),vi_c.in(ref_from_ph2_c));
-            Vj_c.real_imag(vr_c.in(ref_to_ph2_c),vi_c.in(ref_to_ph2_c));
-            Vi2_c.real_imag(vr_c.in(from_ph2_c),vi_c.in(from_ph2_c));
-            Vj2_c.real_imag(vr_c.in(to_ph2_c),vi_c.in(to_ph2_c));
-        }
-        
-        Sij_c.real_imag(Pij2_c,Qij2_c);
-        Sji_c.real_imag(Pji2_c,Qji2_c);
-        Constraint<Cpx> S_fr2_c("S_fr2_c"), S_to2_c("S_to2_c");
-        S_fr2_c = Sij_c - (conj(Y0_c)+conj(Yc_fr_c))*Vfr_c*conj(Vfr_c) + conj(Y0_c)*Vfr_c*conj(Vto_c) - (conj(Y2_c)*Vi_c)*(conj(Vi2_c) - conj(Vj2_c));
-        S_to2_c = Sji_c - (conj(Y0_c)+conj(Yc_to_c))*Vto_c*conj(Vto_c) + conj(Y0_c)*Vto_c*conj(Vfr_c) - (conj(Y2_c)*Vj_c)*(conj(Vj2_c) - conj(Vi2_c));
-        ODO->add(S_fr2_c.in(Et2_c)==0);
-        ODO->add(S_to2_c.in(Et2_c)==0);
-        /* Phase 3 */
-        Yc_fr_c.real_imag(g_fr_.in(Et3_c),b_fr_.in(Et3_c));
-        Yc_to_c.real_imag(g_to_.in(Et3_c),b_to_.in(Et3_c));
-        Y0_c.real_imag(g.in(branch_id_ph3_c),b.in(branch_id_ph3_c));
-        Y3_c.real_imag(g.in(branch_ph3_c),b.in(branch_ph3_c));
-        if(pmt==ACRECT){
-            Vfr_c.real_imag(vr_fr3_c,vi_fr3_c);
-            Vto_c.real_imag(vr_to3_c,vi_to3_c);
-            Vi_c.real_imag(vr_c.in(ref_from_ph3_c),vi_c.in(ref_from_ph3_c));
-            Vj_c.real_imag(vr_c.in(ref_to_ph3_c),vi_c.in(ref_to_ph3_c));
-            Vi3_c.real_imag(vr_c.in(from_ph3_c),vi_c.in(from_ph3_c));
-            Vj3_c.real_imag(vr_c.in(to_ph3_c),vi_c.in(to_ph3_c));
-        }
-        
-        Sij_c.real_imag(Pij3_c,Qij3_c);
-        Sji_c.real_imag(Pji3_c,Qji3_c);
-        Constraint<Cpx> S_fr3_c("S_fr3_c"), S_to3_c("S_to3_c");
-        S_fr3_c = Sij_c - (conj(Y0_c)+conj(Yc_fr_c))*Vfr_c*conj(Vfr_c) + conj(Y0_c)*Vfr_c*conj(Vto_c) - (conj(Y3_c)*Vi_c)*(conj(Vi3_c) - conj(Vj3_c));
-        S_to3_c = Sji_c - (conj(Y0_c)+conj(Yc_to_c))*Vto_c*conj(Vto_c) + conj(Y0_c)*Vto_c*conj(Vfr_c) - (conj(Y3_c)*Vj_c)*(conj(Vj3_c) - conj(Vi3_c));
-        ODO->add(S_fr3_c.in(Et3_c)==0);
-        ODO->add(S_to3_c.in(Et3_c)==0);
-        
         
         /** KCL Flow conservation in contingency/resiliency mode */
         Constraint<> KCL_P_c("KCL_P_c");
         Constraint<> KCL_Q_c("KCL_Q_c");
-        KCL_P_c  = sum(Pij_c, out_arcs_c) + sum(Pji_c, in_arcs_c) + pl.in(Nt_c) - sum(Pg_c, gen_nodes_c) - sum(Pv_c, PV_nodes_c) - sum(Pb_c, batt_nodes_c) - sum(Pw_c, Wind_nodes_c);
-        KCL_Q_c  = sum(Qij_c, out_arcs_c) + sum(Qji_c, in_arcs_c) + ql.in(Nt_c)  - sum(Qg_c, gen_nodes_c);
+        KCL_P_c  = sum(Pij_c, out_arcs_c) + sum(Pji_c, in_arcs_c) + pl.in(Nt_c)*(1-pls.in(Nt_c)) - sum(Pg_c, gen_nodes_c) - sum(Pv_c, PV_nodes_c) - sum(Pb_c, batt_nodes_c) - sum(Pw_c, Wind_nodes_c);
+        KCL_Q_c  = sum(Qij_c, out_arcs_c) + sum(Qji_c, in_arcs_c) + ql.in(Nt_c)*(1-qls.in(Nt_c))  - sum(Qg_c, gen_nodes_c);
         KCL_P_c += gs_.in(Nt_c)*(pow(vr_c.in(Nt_c),2)+pow(vi_c.in(Nt_c),2));
         KCL_Q_c -= bs_.in(Nt_c)*(pow(vr_c.in(Nt_c),2)+pow(vi_c.in(Nt_c),2));
         ODO->add(KCL_P_c.in(Nt_c) == 0);
@@ -4532,6 +4607,14 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
             Vol_limit_LB_c -= pow(v_min.in(Nt_c),2);
             ODO->add(Vol_limit_LB_c.in(Nt_c) >= 0);
         }
+        auto Nt_critical = indices(T_c, get_critical(1));
+        Constraint<> Critical_Loads_p("Critical_Loads_p");
+        Critical_Loads_p = pls.in(Nt_critical);
+        ODO->add(Critical_Loads_p.in(Nt_critical) == 0);
+        
+        Constraint<> Critical_Loads_q("Critical_Loads_q");
+        Critical_Loads_q = qls.in(Nt_critical);
+        ODO->add(Critical_Loads_q.in(Nt_critical) == 0);
         
         /**  GENERATOR INVESTMENT **/
         
