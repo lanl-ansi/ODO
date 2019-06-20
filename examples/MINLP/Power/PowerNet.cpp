@@ -2181,7 +2181,8 @@ int PowerNet::readODO(const string& fname){
                             exist_G_ph.insert("ph"+to_string(ph)+","+name);
                         }
                     }
-                    for (auto i = exist; i<exist+max_d; i++) {
+                    assert(max_d>=exist);
+                    for (auto i = exist; i<max_d - exist +1; i++) {
                         auto copy = _all_diesel_gens[index];
                         auto name = copy._name + "," + bus->_name + "," + "slot"+to_string(i);
                         auto gen = new Gen(bus, name, 0, copy._max_p, -copy._max_s, copy._max_s);
@@ -2316,7 +2317,8 @@ int PowerNet::readODO(const string& fname){
                         }
                         
                     }
-                    for (unsigned i = exist; i<exist+max_bat; i++) {
+                    assert(max_bat>=exist);
+                    for (unsigned i = exist; i<max_bat-exist+1; i++) {
                         auto copy = new BatteryInverter(_all_battery_inverters[index]);
                         copy->_name += "," + bus->_name + "," + "slot"+to_string(i);
                         copy->_bat_type = index+1;
@@ -3294,531 +3296,531 @@ void PowerNet::time_expand(const indices& T) {
 }
 
 
-shared_ptr<Model<>> PowerNet::build_ODO_model_polar(int output, double tol, int max_nb_hours, bool networked){
-    
-    
-    /* Grid Parameters */
-    _nb_hours = max_nb_hours;
-    
-    /** Indices Sets */
-    hours = time(1,max_nb_hours); /**< Hours */
-    hours._name = "hours";
-    //            indices months = time("jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"); /**< Months */
-    //    indices months = time("jan","feb","mar","apr","may","jun"); /**< Months */
-    //    months = time("apr", "aug", "dec"); /**< Months */
-    //    indices months = time("jan", "feb");
-    //    indices years = time("year1", "year2", "year3");
-    years._name = "years";
-    //    indices months = time("summer", "spring", "autumn", "winter");
-    months._name = "months";
-    indices phases = indices("ph1","ph2","ph3");
-    phases._name = "phases";
-    //    typical_days = time("week","peak","weekend");
-    typical_days = time("week");
-    typical_days._name = "typical_days";
-    T = indices(years,months,typical_days,hours);
-    double nT = T.size();
-    DebugOn("number of time periods = " << nT << endl);
-    Nt = indices(T,N_ph);
-    Et = indices(T,E_ph);
-    Et1 = indices(T,E_ph1);
-    Et2 = indices(T,E_ph2);
-    Et3 = indices(T,E_ph3);
-    Gt = indices(T,G_ph);
-    PVt = indices(T,PV_ph);
-    Wt = indices(T,Wind_ph);
-    exist_Gt = indices(T,exist_G_ph);
-    exist_Bt = indices(T,exist_B_ph);
-    exist_Et = indices(T,exist_E_ph);
-    exist_PVt = indices(T,exist_PV_ph);
-    exist_Windt = indices(T,exist_Wind_ph);
-    pot_Gt = indices(T,pot_G_ph);
-    pot_Bt = indices(T,pot_B_ph);
-    pot_Et = indices(T,pot_E_ph);
-    pot_PVt = indices(T,pot_PV_ph);
-    pot_Windt = indices(T,pot_Wind_ph);
-    Bt = indices(T,B_ph);
-    /** Sets */
-    auto bus_pairs = this->get_bus_pairs();
-    auto gen_nodes = this->gens_per_node_time();
-    auto batt_nodes = this->Batt_per_node_time();
-    auto PV_nodes = this->PV_per_node_time();
-    auto Wind_nodes = this->Wind_per_node_time();
-    auto out_arcs = this->out_arcs_per_node_time();
-    auto in_arcs = this->in_arcs_per_node_time();
-    
-    /** MODEL DECLARATION */
-    shared_ptr<Model<>> ODO(new Model<>("ODO Model"));
-    /** VARIABLES */
-    
-    
-    /* Investment binaries */
-    
-    var<> Pv_cap("Pv_cap", 0, pv_max); /**< Real variable indicating the extra capacity of PV to be installed on bus b */
-    ODO->add(Pv_cap.in(pot_PV_ph));
-    var<int> w_g("w_g",0,1); /**< Binary variable indicating if generator g is built on bus */
-    var<int> w_b("w_b",0,1); /**< Binary variable indicating if battery b is built on bus */
-    var<int> w_e("w_e",0,1); /**< Binary variable indicating if expansion is selected for edge e */
-    var<int> w_pv("w_pv",0,1); /**< Binary variable indicating if PV is installed on bus b */
-    var<int> w_wind("w_wind",0,1); /**< Binary variable indicating if Wind is installed on bus b */
-    ODO->add(w_g.in(pot_G_ph),w_b.in(pot_B_ph),w_e.in(pot_E_ph),w_pv.in(pot_PV_ph),w_wind.in(pot_Wind_ph));
-    w_g.initialize_all(1);
-    w_b.initialize_all(1);
-    w_e.initialize_all(1);
-    w_pv.initialize_all(1);
-    w_wind.initialize_all(1);
-    
-    this->w_g = w_g;
-    this->w_b = w_b;
-    this->w_e = w_e;
-    this->w_pv = w_pv;
-    this->w_wind = w_wind;
-    this->Pv_cap = Pv_cap;
-    
-    DebugOff("size w_g = " << w_g.get_dim() << endl);
-    DebugOff("size w_b = " << w_b.get_dim() << endl);
-    DebugOff("size w_e = " << w_e.get_dim() << endl);
-    DebugOff("size w_pv = " << w_pv.get_dim() << endl);
-    DebugOff("size w_wind = " << w_wind.get_dim() << endl);
-    DebugOff("size Pv_cap = " << Pv_cap.get_dim() << endl);
-    
-    
-    /* Diesel power generation variables */
-    var<> Pg("Pg", pg_min.in(Gt), pg_max.in(Gt));
-    var<> Qg ("Qg", qg_min.in(Gt), qg_max.in(Gt));
-    var<> Pg_ ("Pg_", pg_min.in(Gt), pg_max.in(Gt));/**< Active power generation before losses */
-    var<> Pg2("Pg2", 0, pow(pg_max.in(pot_Gt),2));/**< Square of Pg */
-    ODO->add(Pg.in(Gt));
-    ODO->add(Pg_.in(Gt));
-    ODO->add(Qg.in(Gt));
-    ODO->add(Pg2.in(pot_Gt));
-    DebugOff("size Pg = " << Pg.get_dim() << endl);
-    DebugOff("size Pg_ = " << Pg_.get_dim() << endl);
-    DebugOff("size Qg = " << Qg.get_dim() << endl);
-    DebugOff("size Pg2 = " << Pg2.get_dim() << endl);
-    
-    this->Pg_ = Pg_;
-    
-    /* Battery power generation variables */
-    var<> Pb("Pb", pb_min.in(Bt), pb_max.in(Bt));/**< Active power generation outside the battery */
-    var<> Qb ("Qb", qb_min.in(Bt), qb_max.in(Bt));/**< Reactive power generation outside the battery */
-    var<> Pb_("Pb_", pb_min.in(Bt), pb_max.in(Bt));/**< Active power generation in the battery */
-    ODO->add(Pb.in(Bt), Qb.in(Bt), Pb_.in(Bt));
-    DebugOff("size Pb = " << Pb.get_dim() << endl);
-    DebugOff("size Qb = " << Qb.get_dim() << endl);
-    
-    
-    /* PV power generation variables */
-    var<> Pv("Pv", 0,pv_max.in(PVt));
-    ODO->add(Pv.in(PVt));
-    DebugOff("size Pv = " << Pv.get_dim() << endl);
-    
-    /* Battery state of charge variables */
-    var<> Sc("Sc", pos_);
-    ODO->add(Sc.in(Bt));
-    DebugOff("size Sc = " << Sc.get_dim() << endl);
-    
-    /* Wind power generation variables */
-    var<> Pw("Pw", 0, pw_max.in(Wt));
-    ODO->add(Pw.in(Wt));
-    DebugOff("size Pw = " << Pw.get_dim() << endl);
-    
-    /* Power flow variables */
-    var<> Pij("Pfrom", -1*S_max.in(Et), S_max.in(Et));
-    var<> Qij("Qfrom", -1*S_max.in(Et), S_max.in(Et));
-    var<> Pji("Pto", -1*S_max.in(Et), S_max.in(Et));
-    var<> Qji("Qto", -1*S_max.in(Et), S_max.in(Et));
-    
-    ODO->add(Pij.in(Et),Pji.in(Et),Qij.in(Et),Qji.in(Et));
-    DebugOff("size Pij = " << Pij.get_dim() << endl);
-    ODO->add(Pji.in(Et),Qji.in(Et));
-    
-    /** Voltage magnitude (squared) variables */
-    var<> v("v", v_min.in(Nt), v_max.in(Nt));
-    var<> theta("𝛉");
-    var<> vr("vr", -1*v_max.in(Nt),v_max.in(Nt));
-    var<> vi("vi", -1*v_max.in(Nt),v_max.in(Nt));
-    
-    var<> v_fr, v_to, theta_fr, theta_to;
-    var<> v_fr1, v_to1, theta_fr1, theta_to1;
-    var<> v_fr2, v_to2, theta_fr2, theta_to2;
-    var<> v_fr3, v_to3, theta_fr3, theta_to3;
-    var<> vr_fr, vr_to, vi_fr, vi_to;
-    var<> vr_fr1,vr_fr2,vr_fr3,vi_fr1,vi_fr2,vi_fr3;
-    var<> vr_to1,vr_to2,vr_to3,vi_to1,vi_to2,vi_to3;
-    
-    ODO->add(v.in(Nt));
-    ODO->add(theta.in(Nt));
-    Debug("size v = " << v.get_dim() << endl);
-    v.initialize_all(1);
-    v_fr = v.from(Et);
-    v_to = v.to(Et);
-    theta_fr = theta.from(Et);
-    theta_to = theta.to(Et);
-    /* Indexing the voltage variables */
-    v_fr1 = v.from(Et1); theta_fr1 = theta.from(Et1);
-    v_fr2 = v.from(Et2); theta_fr2 = theta.from(Et2);
-    v_fr3 = v.from(Et3); theta_fr3 = theta.from(Et3);
-    v_to1 = v.to(Et1); theta_to1 = theta.to(Et1);
-    v_to2 = v.to(Et2); theta_to2 = theta.to(Et2);
-    v_to3 = v.to(Et3); theta_to3 = theta.to(Et3);
-    auto Pij1 = Pij.in(Et1);auto Pij2 = Pij.in(Et2);auto Pij3 = Pij.in(Et3);
-    auto Pji1 = Pji.in(Et1);auto Pji2 = Pji.in(Et2);auto Pji3 = Pji.in(Et3);
-    auto Qij1 = Qij.in(Et1);auto Qij2 = Qij.in(Et2);auto Qij3 = Qij.in(Et3);
-    auto Qji1 = Qji.in(Et1);auto Qji2 = Qji.in(Et2);auto Qji3 = Qji.in(Et3);
-    /** Indices */
-    auto branch_id_ph1 = get_branch_id_phase(1);
-    auto branch_id_ph2 = get_branch_id_phase(2);
-    auto branch_id_ph3 = get_branch_id_phase(3);
-    auto branch_ph1 = get_branch_phase(1);
-    auto branch_ph2 = get_branch_phase(2);
-    auto branch_ph3 = get_branch_phase(3);
-    auto ref_from_ph1 = fixed_from_branch_phase(1);
-    auto ref_from_ph2 = fixed_from_branch_phase(2);
-    auto ref_from_ph3 = fixed_from_branch_phase(3);
-    auto ref_to_ph1 = fixed_to_branch_phase(1);
-    auto ref_to_ph2 = fixed_to_branch_phase(2);
-    auto ref_to_ph3 = fixed_to_branch_phase(3);
-    auto from_ph1 = from_branch_phase(1);
-    auto from_ph2 = from_branch_phase(2);
-    auto from_ph3 = from_branch_phase(3);
-    auto to_ph1 = to_branch_phase(1);
-    auto to_ph2 = to_branch_phase(2);
-    auto to_ph3 = to_branch_phase(3);
-    
-    /** Power Flows */
-    param<Cpx> Y0("Y0"), Y1("Y1"), Y2("Y2"), Y3("Y3");
-    param<Cpx> Yc_fr("Yc_fr"), Yc_to("Yc_to");/* Line charging */
-    var<Cpx> Vfr("Vfr"), Vto("Vto");
-    var<Cpx> Sij("Sij"), Sji("Sji"), Vi("Vi"), Vj("Vj"), Vi1("Vi1"), Vi2("Vi2"), Vi3("Vi3"), Vj1("Vj1"), Vj2("Vj2"), Vj3("Vj3");
-    /* Phase 1 */
-    Yc_fr.real_imag(g_fr_.in(Et1),b_fr_.in(Et1));
-    Yc_to.real_imag(g_to_.in(Et1),b_to_.in(Et1));
-    Y0.real_imag(g.in(branch_id_ph1),b.in(branch_id_ph1));
-    Y1.real_imag(g.in(branch_ph1),b.in(branch_ph1));
-    Vfr.mag_ang(v_fr1,theta_fr1);
-    Vto.mag_ang(v_to1,theta_to1);
-    Vi.mag_ang(v.in(ref_from_ph1),theta.in(ref_from_ph1));
-    Vj.mag_ang(v.in(ref_to_ph1),theta.in(ref_to_ph1));
-    Vi1.mag_ang(v.in(from_ph1),theta.in(from_ph1));
-    Vj1.mag_ang(v.in(to_ph1),theta.in(to_ph1));
-    Sij.real_imag(Pij1,Qij1);
-    Sji.real_imag(Pji1,Qji1);
-    
-    
-    Constraint<Cpx> S_fr1("S_fr1"), S_to1("S_to1");
-    S_fr1 = Sij - (conj(Y0)+conj(Yc_fr))*Vfr*conj(Vfr) + conj(Y0)*Vfr*conj(Vto) - (conj(Y1)*Vi)*(conj(Vi1) - conj(Vj1));
-    S_to1 = Sji - (conj(Y0)+conj(Yc_to))*Vto*conj(Vto) + conj(Y0)*Vto*conj(Vfr) - (conj(Y1)*Vj)*(conj(Vj1) - conj(Vi1));
-    ODO->add(S_fr1.in(Et1)==0);
-    ODO->add(S_to1.in(Et1)==0);
-    /* Phase 2 */
-    Yc_fr.real_imag(g_fr_.in(Et2),b_fr_.in(Et2));
-    Yc_to.real_imag(g_to_.in(Et2),b_to_.in(Et2));
-    Y0.real_imag(g.in(branch_id_ph2),b.in(branch_id_ph2));
-    Y2.real_imag(g.in(branch_ph2),b.in(branch_ph2));
-    
-    Vfr.mag_ang(v_fr2,theta_fr2);
-    Vto.mag_ang(v_to2,theta_to2);
-    Vi.mag_ang(v.in(ref_from_ph2),theta.in(ref_from_ph2));
-    Vj.mag_ang(v.in(ref_to_ph2),theta.in(ref_to_ph2));
-    Vi2.mag_ang(v.in(from_ph2),theta.in(from_ph2));
-    Vj2.mag_ang(v.in(to_ph2),theta.in(to_ph2));
-    
-    Sij.real_imag(Pij2,Qij2);
-    Sji.real_imag(Pji2,Qji2);
-    Constraint<Cpx> S_fr2("S_fr2"), S_to2("S_to2");
-    S_fr2 = Sij - (conj(Y0)+conj(Yc_fr))*Vfr*conj(Vfr) + conj(Y0)*Vfr*conj(Vto) - (conj(Y2)*Vi)*(conj(Vi2) - conj(Vj2));
-    S_to2 = Sji - (conj(Y0)+conj(Yc_to))*Vto*conj(Vto) + conj(Y0)*Vto*conj(Vfr) - (conj(Y2)*Vj)*(conj(Vj2) - conj(Vi2));
-    ODO->add(S_fr2.in(Et2)==0);
-    ODO->add(S_to2.in(Et2)==0);
-    /* Phase 3 */
-    Yc_fr.real_imag(g_fr_.in(Et3),b_fr_.in(Et3));
-    Yc_to.real_imag(g_to_.in(Et3),b_to_.in(Et3));
-    Y0.real_imag(g.in(branch_id_ph3),b.in(branch_id_ph3));
-    Y3.real_imag(g.in(branch_ph3),b.in(branch_ph3));
-    Vfr.mag_ang(v_fr3,theta_fr3);
-    Vto.mag_ang(v_to3,theta_to3);
-    Vi.mag_ang(v.in(ref_from_ph3),theta.in(ref_from_ph3));
-    Vj.mag_ang(v.in(ref_to_ph3),theta.in(ref_to_ph3));
-    Vi3.mag_ang(v.in(from_ph3),theta.in(from_ph3));
-    Vj3.mag_ang(v.in(to_ph3),theta.in(to_ph3));
-    
-    Sij.real_imag(Pij3,Qij3);
-    Sji.real_imag(Pji3,Qji3);
-    Constraint<Cpx> S_fr3("S_fr3"), S_to3("S_to3");
-    S_fr3 = Sij - (conj(Y0)+conj(Yc_fr))*Vfr*conj(Vfr) + conj(Y0)*Vfr*conj(Vto) - (conj(Y3)*Vi)*(conj(Vi3) - conj(Vj3));
-    S_to3 = Sji - (conj(Y0)+conj(Yc_to))*Vto*conj(Vto) + conj(Y0)*Vto*conj(Vfr) - (conj(Y3)*Vj)*(conj(Vj3) - conj(Vi3));
-    ODO->add(S_fr3.in(Et3)==0);
-    ODO->add(S_to3.in(Et3)==0);
-    //        ODO->print();
-    //        exit(-1);
-    //
-    //    /** Power loss variables */
-    //    var<Real> ploss("ploss");
-    //    var<Real> qloss("qloss");
-    //    if (pmt==DISTF || pmt==CDISTF) {
-    //        ODO->add(ploss.in(Et));
-    //        ODO->add(qloss.in(Et));
-    //    }
-    //
-    /** Loss constraint */
-    //    Constraint<> PLosses1("PLosses1");
-    //    PLosses1 = Pij + Pji;
-    //    ODO->add(PLosses1.in(Et) >= 0.004149/nb_branches*Pij);
-    //
-    //    Constraint<> PLosses2("PLosses2");
-    //    PLosses2 = Pij + Pji;
-    //    ODO->add(PLosses2.in(Et) >= 0.004149/nb_branches*Pji);
-    //
-    //    Constraint<> QLosses("QLosses");
-    //    QLosses = Qij + Qji;
-    //    ODO->add(QLosses.in(Et) >= 0);
-    //
-    /** OBJECTIVE FUNCTION */
-    //check pot_gen
-    func<> obj = product(c1.in(exist_Gt), Pg_.in(exist_Gt)) + product(c1.in(pot_Gt), Pg_.in(pot_Gt)) + product(c2.in(exist_Gt), pow(Pg_.in(exist_Gt),2)) + product(c2.in(pot_Gt), Pg2.in(pot_Gt)) + sum(c0.in(exist_Gt));
-    //    obj *= 12./months.size();
-    //    obj += nT*product(c0.in(pot_G_ph),w_g);
-    obj += 1e-3*product(gen_capcost.in(pot_G_ph), w_g);
-    obj += 1e-3*product(inverter_capcost.in(pot_B_ph), w_b);
-    obj += 1e-3*product(expansion_capcost.in(pot_E_ph), w_e);
-    obj += 1e-3*product(pv_capcost.in(pot_PV_ph), w_pv);
-    obj += 1e-3*product(pv_varcost.in(pot_PV_ph), Pv_cap);
-    ODO->min(obj);
-    //    obj += sum(Pg);
-    //    ODO->min(sum(Pg));
-    //    func<> obj = product(c2.in(Gt), pow(Pg.in(Gt),2));
-    //    ODO->min(obj);
-    
-    /** CONSTRAINTS **/
-    
-    /** Voltage magnitude at source bus **/
-    //    indices ref_id("ref_id");
-    //    ref_id.insert(ref_bus);
-    //    ref_id = indices(T,phases,ref_id);
-    //    Constraint<> fix_voltage_mag("fix_voltage_mag");
-    //    if(pmt==ACPOL){
-    //        fix_voltage_mag += v.in(ref_id) - vm_s_;
-    //    }
-    //    else {
-    //        fix_voltage_mag += pow(vr.in(ref_id),2) + pow(vi.in(ref_id),2) - pow(vm_s_.in(ref_id),2);
-    //    }
-    //    ODO->add(fix_voltage_mag.in(ref_id)==0);
-    
-    
-    /** Voltage angle at source bus **/
-    //    Constraint<> fix_voltage_ang("fix_voltage_ang");
-    //    if(pmt==ACPOL){
-    //        fix_voltage_ang += theta.in(ref_id) - theta_s_.in(ref_id);
-    //    }
-    //    else {
-    //        fix_voltage_ang += vi.in(ref_id) - theta_s_.in(ref_id)*vr.in(ref_id);
-    //    }
-    //    ODO->add(fix_voltage_ang.in(ref_id)==0);
-    
-    /** FLOW CONSERVATION **/
-    
-    /** KCL Flow conservation */
-    Constraint<> KCL_P("KCL_P");
-    Constraint<> KCL_Q("KCL_Q");
-    KCL_P  = sum(Pij, out_arcs) + sum(Pji, in_arcs) + pl.in(Nt) - sum(Pg, gen_nodes) - sum(Pv, PV_nodes) - sum(Pb, batt_nodes) - sum(Pw, Wind_nodes);
-    KCL_Q  = sum(Qij, out_arcs) + sum(Qji, in_arcs) + ql.in(Nt)  - sum(Qg, gen_nodes);
-    KCL_P += gs_.in(Nt)*pow(v.in(Nt),2);
-    KCL_Q -= bs_.in(Nt)*pow(v.in(Nt),2);
-    ODO->add(KCL_P.in(Nt) == 0);
-    ODO->add(KCL_Q.in(Nt) == 0);
-    
-    /**  THERMAL LIMITS **/
-    
-    /*  Thermal Limit Constraints for existing lines */
-    Constraint<> Thermal_Limit_from("Thermal_Limit_from");
-    Thermal_Limit_from += pow(Pij.in(exist_Et), 2) + pow(Qij.in(exist_Et), 2);
-    Thermal_Limit_from -= pow(S_max.in(exist_Et), 2);
-    ODO->add(Thermal_Limit_from.in(exist_Et) <= 0);
-    
-    Constraint<> Thermal_Limit_to("Thermal_Limit_to");
-    Thermal_Limit_to += pow(Pji.in(exist_Et), 2) + pow(Qji.in(exist_Et), 2);
-    Thermal_Limit_to -= pow(S_max.in(exist_Et), 2);
-    ODO->add(Thermal_Limit_to.in(exist_Et) <= 0);
-    
-    
-    /*  Thermal Limit Constraints for expansion edges */
-    Constraint<> Thermal_Limit_from_exp("Thermal_Limit_From_Exp");
-    Thermal_Limit_from_exp += pow(Pij.in(pot_Et), 2) + pow(Qij.in(pot_Et), 2);
-    Thermal_Limit_from_exp -= pow(w_e.in(pot_Et),2)*pow(S_max.in(pot_Et), 2);
-    ODO->add(Thermal_Limit_from_exp.in(pot_Et) <= 0);
-    
-    Constraint<> Thermal_Limit_to_exp("Thermal_Limit_to_Exp");
-    Thermal_Limit_to_exp += pow(Pji.in(pot_Et), 2) + pow(Qji.in(pot_Et), 2);
-    Thermal_Limit_to_exp -= pow(w_e.in(pot_Et),2)*pow(S_max.in(pot_Et), 2);
-    ODO->add(Thermal_Limit_to_exp.in(pot_Et) <= 0);
-    
-    /**  GENERATOR INVESTMENT **/
-    
-    /*  On/Off status */
-    Constraint<> OnOff_maxP("OnOff_maxP");
-    OnOff_maxP += Pg_.in(pot_Gt) - pg_max.in(pot_Gt)*w_g.in(pot_Gt);
-    ODO->add(OnOff_maxP.in(pot_Gt) <= 0);
-    
-    Constraint<> Perspective_OnOff("Perspective_OnOff");
-    Perspective_OnOff += pow(Pg_.in(pot_Gt),2) - Pg2.in(pot_Gt)*w_g.in(pot_Gt);
-    ODO->add(Perspective_OnOff.in(pot_Gt) <= 0);
-    
-    Constraint<> OnOff_maxQ("OnOff_maxQ");
-    OnOff_maxQ += Qg.in(pot_Gt) - qg_max.in(pot_Gt)*w_g.in(pot_Gt);
-    ODO->add(OnOff_maxQ.in(pot_Gt) <= 0);
-    
-    Constraint<> OnOff_maxQ_N("OnOff_maxQ_N");
-    OnOff_maxQ_N += Qg.in(pot_Gt) - qg_min.in(pot_Gt)*w_g.in(pot_Gt);
-    ODO->add(OnOff_maxQ_N.in(pot_Gt) >= 0);
-    
-    /**  PV **/
-    
-    /*  On/Off on Potential PV */
-    Constraint<> OnOffPV("OnOffPV");
-    OnOffPV += Pv_cap.in(pot_PV_ph) - w_pv*pv_max.in(pot_PV_ph);
-    ODO->add(OnOffPV.in(pot_PV_ph) <= 0);
-    
-    /*  Max Cap on Potential PV */
-    Constraint<> MaxCapPV("MaxCapPV");
-    MaxCapPV += Pv.in(pot_PVt) - Pv_cap.in(pot_PVt)*pv_out.in(pot_PVt);
-    ODO->add(MaxCapPV.in(pot_PVt) <= 0);
-    
-    /*  Existing PV */
-    Constraint<> existPV("existPV");
-    existPV += Pv.in(exist_PVt) - pv_max.in(exist_PVt)*pv_out.in(exist_PVt);
-    ODO->add(existPV.in(exist_PVt) <= 0);
-    
-    
-    /**  BATTERIES **/
-    
-    /*  Apparent Power Limit on Potential Batteries */
-    Constraint<> Apparent_Limit_Batt_Pot("Apparent_Limit_Batt_Potential");
-    Apparent_Limit_Batt_Pot += pow(Pb.in(pot_Bt), 2) + pow(Qb.in(pot_Bt), 2);
-    Apparent_Limit_Batt_Pot -= pow(w_b.in(pot_Bt),2)*pow(pb_max.in(pot_Bt), 2);
-    ODO->add(Apparent_Limit_Batt_Pot.in(pot_Bt) <= 0);
-    
-    /*  Apparent Power Limit on Existing Batteries */
-    Constraint<> Apparent_Limit_Batt("Apparent_Limit_Batt_Existing");
-    Apparent_Limit_Batt += pow(Pb.in(exist_Bt), 2) + pow(Qb.in(exist_Bt), 2);
-    Apparent_Limit_Batt -= pow(pb_max.in(exist_Bt), 2);
-    ODO->add(Apparent_Limit_Batt.in(exist_Bt) <= 0);
-    
-    
-    /*  State Of Charge */
-    auto T1 = T.exclude(T.first());/**< Excluding first time step */
-    auto Tn = T.exclude(T.last());/**< Excluding last time step */
-    Bt1 = indices(T1,B_ph);
-    Btn = indices(Tn,B_ph);
-    Constraint<> State_Of_Charge("State_Of_Charge");
-    State_Of_Charge = Sc.in(Bt1) - Sc.in(Btn) + Pb_.in(Bt1);
-    ODO->add(State_Of_Charge.in(Bt1) == 0);
-    
-    /*  State Of Charge 0 */
-    auto T0 = indices("T0");
-    T0.insert(T.first());
-    auto Bat0 = indices(T0,B_ph);
-    Constraint<> State_Of_Charge0("State_Of_Charge0");
-    State_Of_Charge0 = Sc.in(Bat0);
-    ODO->add(State_Of_Charge0.in(Bat0) == 0);
-    Constraint<> Pb0("Pb0");
-    Pb0 = Pb_.in(Bat0);
-    ODO->add(Pb0.in(Bat0) == 0);
-    
-    /*  EFFICIENCIES */
-    Constraint<> DieselEff("DieselEff");
-    DieselEff += Pg - gen_eff.in(Gt)*Pg_;
-    ODO->add(DieselEff.in(Gt) == 0);
-    
-    auto exist_batt_eff = indices(exist_Bt,_eff_pieces);
-    auto pot_batt_eff = indices(pot_Bt,_eff_pieces);
-    Constraint<> EfficiencyExist("BatteryEfficiencyExisting");
-    EfficiencyExist += Pb.in(exist_batt_eff)  - eff_a.in(exist_batt_eff)*Pb_.in(exist_batt_eff) - eff_b.in(exist_batt_eff);
-    ODO->add(EfficiencyExist.in(exist_batt_eff) <= 0);
-    
-    Constraint<> EfficiencyPot("BatteryEfficiencyPotential");
-    EfficiencyPot += Pb.in(pot_batt_eff)  - eff_a.in(pot_batt_eff)*Pb_.in(pot_batt_eff) - eff_b.in(pot_batt_eff)*w_b.in(pot_batt_eff);
-    ODO->add(EfficiencyPot.in(pot_batt_eff) <= 0);
-    //
-    //
-    //    for (auto n:nodes) {
-    //        auto b = (Bus*)n;
-    //        //        b->print();
-    //        for (auto i = 0; i < b->_pot_gen.size(); i++) {
-    //            auto gen = b->_pot_gen[i];
-    //            if(min_diesel_invest.eval(gen->_name)==max_diesel_invest.eval(gen->_name)){
-    //                Constraint FixedDieselInvest("FixedDieselInvest"+gen->_name);
-    //                FixedDieselInvest += w_g(gen->_name);
-    //                ODO->add(FixedDieselInvest == 1);
-    //                for (auto j = i+1; j < b->_pot_gen.size(); j++) {
-    //                    auto gen2 = b->_pot_gen[j];
-    //                    if (gen2->_gen_type==gen->_gen_type) {
-    //                        Constraint FixedDieselInvest("FixedDieselInvest"+gen2->_name);
-    //                        FixedDieselInvest += w_g(gen2->_name);
-    //                        ODO->add(FixedDieselInvest == 1);
-    //                    }
-    //                }
-    //            }
-    //            else {
-    //                Constraint MinDieselInvest("MinDieselInvest_"+b->_name+"_DG"+to_string(gen->_gen_type));
-    //                MinDieselInvest += w_g(gen->_name);
-    //                for (auto j = i+1; j < b->_pot_gen.size(); j++) {
-    //                    auto gen2 = b->_pot_gen[j];
-    //                    if (gen2->_gen_type==gen->_gen_type) {
-    //                        MinDieselInvest += w_g(gen2->_name);
-    //                    }
-    //                }
-    //                auto rhs = min_diesel_invest.eval(gen->_name);
-    //                if (rhs>0) {
-    //                    ODO->add(MinDieselInvest >= rhs);
-    //                }
-    //            }
-    //        }
-    //        for (auto i = 0; i < b->_pot_bat.size(); i++) {
-    //            auto bat = b->_pot_bat[i];
-    //            if(min_batt_invest.eval(bat->_name)==max_batt_invest.eval(bat->_name)){
-    //                Constraint FixedBattInvest("FixedBattInvest"+bat->_name);
-    //                FixedBattInvest += w_b(bat->_name);
-    //                ODO->add(FixedBattInvest == 1);
-    //                for (auto j = i+1; j < b->_pot_bat.size(); j++) {
-    //                    auto bat2 = b->_pot_bat[j];
-    //                    if (bat2->_bat_type==bat->_bat_type) {
-    //                        Constraint FixedBattInvest("FixedBattInvest"+bat2->_name);
-    //                        FixedBattInvest += w_b(bat2->_name);
-    //                        ODO->add(FixedBattInvest == 1);
-    //                    }
-    //                }
-    //            }
-    //            else {
-    //                Constraint MinBattInvest("MinBattInvest_"+b->_name+"_DG"+to_string(bat->_bat_type));
-    //                MinBattInvest += w_b(bat->_name);
-    //                for (auto j = i+1; j < b->_pot_bat.size(); j++) {
-    //                    auto bat2 = b->_pot_bat[j];
-    //                    if (bat2->_bat_type==bat->_bat_type) {
-    //                        MinBattInvest += w_b(bat2->_name);
-    //                    }
-    //                }
-    //                auto rhs = min_batt_invest.eval(bat->_name);
-    //                if (rhs>0) {
-    //                    ODO->add(MinBattInvest >= rhs);
-    //                }
-    //            }
-    //        }
-    //    }
-    //    ODO->print();
-    bool build_contingency = true;
-    if(build_contingency){
-        DebugOn("Building resiliency constraints" << endl);
-        Gt_c = get_conting_gens(_res_scenarios);
-        Et_c = get_conting_arcs(_res_scenarios);
-        auto ConT = get_time_ids_conting(_res_scenarios);
-        PVt_c = indices(ConT, PV_ph);
-        Bt_c = indices(ConT, B_ph);
-    }
-    
-    
-    return ODO;
-}
+//shared_ptr<Model<>> PowerNet::build_ODO_model_polar(int output, double tol, int max_nb_hours, bool networked){
+//
+//
+//    /* Grid Parameters */
+//    _nb_hours = max_nb_hours;
+//
+//    /** Indices Sets */
+//    hours = time(1,max_nb_hours); /**< Hours */
+//    hours._name = "hours";
+//    //            indices months = time("jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"); /**< Months */
+//    //    indices months = time("jan","feb","mar","apr","may","jun"); /**< Months */
+//    //    months = time("apr", "aug", "dec"); /**< Months */
+//    //    indices months = time("jan", "feb");
+//    //    indices years = time("year1", "year2", "year3");
+//    years._name = "years";
+//    //    indices months = time("summer", "spring", "autumn", "winter");
+//    months._name = "months";
+//    indices phases = indices("ph1","ph2","ph3");
+//    phases._name = "phases";
+//    //    typical_days = time("week","peak","weekend");
+//    typical_days = time("week");
+//    typical_days._name = "typical_days";
+//    T = indices(years,months,typical_days,hours);
+//    double nT = T.size();
+//    DebugOn("number of time periods = " << nT << endl);
+//    Nt = indices(T,N_ph);
+//    Et = indices(T,E_ph);
+//    Et1 = indices(T,E_ph1);
+//    Et2 = indices(T,E_ph2);
+//    Et3 = indices(T,E_ph3);
+//    Gt = indices(T,G_ph);
+//    PVt = indices(T,PV_ph);
+//    Wt = indices(T,Wind_ph);
+//    exist_Gt = indices(T,exist_G_ph);
+//    exist_Bt = indices(T,exist_B_ph);
+//    exist_Et = indices(T,exist_E_ph);
+//    exist_PVt = indices(T,exist_PV_ph);
+//    exist_Windt = indices(T,exist_Wind_ph);
+//    pot_Gt = indices(T,pot_G_ph);
+//    pot_Bt = indices(T,pot_B_ph);
+//    pot_Et = indices(T,pot_E_ph);
+//    pot_PVt = indices(T,pot_PV_ph);
+//    pot_Windt = indices(T,pot_Wind_ph);
+//    Bt = indices(T,B_ph);
+//    /** Sets */
+//    auto bus_pairs = this->get_bus_pairs();
+//    auto gen_nodes = this->gens_per_node_time();
+//    auto batt_nodes = this->Batt_per_node_time();
+//    auto PV_nodes = this->PV_per_node_time();
+//    auto Wind_nodes = this->Wind_per_node_time();
+//    auto out_arcs = this->out_arcs_per_node_time();
+//    auto in_arcs = this->in_arcs_per_node_time();
+//
+//    /** MODEL DECLARATION */
+//    shared_ptr<Model<>> ODO(new Model<>("ODO Model"));
+//    /** VARIABLES */
+//
+//
+//    /* Investment binaries */
+//
+//    var<> Pv_cap("Pv_cap", 0, pv_max); /**< Real variable indicating the extra capacity of PV to be installed on bus b */
+//    ODO->add(Pv_cap.in(pot_PV_ph));
+//    var<int> w_g("w_g",0,1); /**< Binary variable indicating if generator g is built on bus */
+//    var<int> w_b("w_b",0,1); /**< Binary variable indicating if battery b is built on bus */
+//    var<int> w_e("w_e",1,1); /**< Binary variable indicating if expansion is selected for edge e */
+//    var<int> w_pv("w_pv",0,1); /**< Binary variable indicating if PV is installed on bus b */
+//    var<int> w_wind("w_wind",0,1); /**< Binary variable indicating if Wind is installed on bus b */
+//    ODO->add(w_g.in(pot_G_ph),w_b.in(pot_B_ph),w_e.in(pot_E_ph),w_pv.in(pot_PV_ph),w_wind.in(pot_Wind_ph));
+//    w_g.initialize_all(1);
+//    w_b.initialize_all(1);
+//    w_e.initialize_all(1);
+//    w_pv.initialize_all(1);
+//    w_wind.initialize_all(1);
+//
+//    this->w_g = w_g;
+//    this->w_b = w_b;
+//    this->w_e = w_e;
+//    this->w_pv = w_pv;
+//    this->w_wind = w_wind;
+//    this->Pv_cap = Pv_cap;
+//
+//    DebugOff("size w_g = " << w_g.get_dim() << endl);
+//    DebugOff("size w_b = " << w_b.get_dim() << endl);
+//    DebugOff("size w_e = " << w_e.get_dim() << endl);
+//    DebugOff("size w_pv = " << w_pv.get_dim() << endl);
+//    DebugOff("size w_wind = " << w_wind.get_dim() << endl);
+//    DebugOff("size Pv_cap = " << Pv_cap.get_dim() << endl);
+//
+//
+//    /* Diesel power generation variables */
+//    var<> Pg("Pg", pg_min.in(Gt), pg_max.in(Gt));
+//    var<> Qg ("Qg", qg_min.in(Gt), qg_max.in(Gt));
+//    var<> Pg_ ("Pg_", pg_min.in(Gt), pg_max.in(Gt));/**< Active power generation before losses */
+//    var<> Pg2("Pg2", 0, pow(pg_max.in(pot_Gt),2));/**< Square of Pg */
+//    ODO->add(Pg.in(Gt));
+//    ODO->add(Pg_.in(Gt));
+//    ODO->add(Qg.in(Gt));
+//    ODO->add(Pg2.in(pot_Gt));
+//    DebugOff("size Pg = " << Pg.get_dim() << endl);
+//    DebugOff("size Pg_ = " << Pg_.get_dim() << endl);
+//    DebugOff("size Qg = " << Qg.get_dim() << endl);
+//    DebugOff("size Pg2 = " << Pg2.get_dim() << endl);
+//
+//    this->Pg_ = Pg_;
+//
+//    /* Battery power generation variables */
+//    var<> Pb("Pb", pb_min.in(Bt), pb_max.in(Bt));/**< Active power generation outside the battery */
+//    var<> Qb ("Qb", qb_min.in(Bt), qb_max.in(Bt));/**< Reactive power generation outside the battery */
+//    var<> Pb_("Pb_", pb_min.in(Bt), pb_max.in(Bt));/**< Active power generation in the battery */
+//    ODO->add(Pb.in(Bt), Qb.in(Bt), Pb_.in(Bt));
+//    DebugOff("size Pb = " << Pb.get_dim() << endl);
+//    DebugOff("size Qb = " << Qb.get_dim() << endl);
+//
+//
+//    /* PV power generation variables */
+//    var<> Pv("Pv", 0,pv_max.in(PVt));
+//    ODO->add(Pv.in(PVt));
+//    DebugOff("size Pv = " << Pv.get_dim() << endl);
+//
+//    /* Battery state of charge variables */
+//    var<> Sc("Sc", pos_);
+//    ODO->add(Sc.in(Bt));
+//    DebugOff("size Sc = " << Sc.get_dim() << endl);
+//
+//    /* Wind power generation variables */
+//    var<> Pw("Pw", 0, pw_max.in(Wt));
+//    ODO->add(Pw.in(Wt));
+//    DebugOff("size Pw = " << Pw.get_dim() << endl);
+//
+//    /* Power flow variables */
+//    var<> Pij("Pfrom", -1*S_max.in(Et), S_max.in(Et));
+//    var<> Qij("Qfrom", -1*S_max.in(Et), S_max.in(Et));
+//    var<> Pji("Pto", -1*S_max.in(Et), S_max.in(Et));
+//    var<> Qji("Qto", -1*S_max.in(Et), S_max.in(Et));
+//
+//    ODO->add(Pij.in(Et),Pji.in(Et),Qij.in(Et),Qji.in(Et));
+//    DebugOff("size Pij = " << Pij.get_dim() << endl);
+//    ODO->add(Pji.in(Et),Qji.in(Et));
+//
+//    /** Voltage magnitude (squared) variables */
+//    var<> v("v", v_min.in(Nt), v_max.in(Nt));
+//    var<> theta("𝛉");
+//    var<> vr("vr", -1*v_max.in(Nt),v_max.in(Nt));
+//    var<> vi("vi", -1*v_max.in(Nt),v_max.in(Nt));
+//
+//    var<> v_fr, v_to, theta_fr, theta_to;
+//    var<> v_fr1, v_to1, theta_fr1, theta_to1;
+//    var<> v_fr2, v_to2, theta_fr2, theta_to2;
+//    var<> v_fr3, v_to3, theta_fr3, theta_to3;
+//    var<> vr_fr, vr_to, vi_fr, vi_to;
+//    var<> vr_fr1,vr_fr2,vr_fr3,vi_fr1,vi_fr2,vi_fr3;
+//    var<> vr_to1,vr_to2,vr_to3,vi_to1,vi_to2,vi_to3;
+//
+//    ODO->add(v.in(Nt));
+//    ODO->add(theta.in(Nt));
+//    Debug("size v = " << v.get_dim() << endl);
+//    v.initialize_all(1);
+//    v_fr = v.from(Et);
+//    v_to = v.to(Et);
+//    theta_fr = theta.from(Et);
+//    theta_to = theta.to(Et);
+//    /* Indexing the voltage variables */
+//    v_fr1 = v.from(Et1); theta_fr1 = theta.from(Et1);
+//    v_fr2 = v.from(Et2); theta_fr2 = theta.from(Et2);
+//    v_fr3 = v.from(Et3); theta_fr3 = theta.from(Et3);
+//    v_to1 = v.to(Et1); theta_to1 = theta.to(Et1);
+//    v_to2 = v.to(Et2); theta_to2 = theta.to(Et2);
+//    v_to3 = v.to(Et3); theta_to3 = theta.to(Et3);
+//    auto Pij1 = Pij.in(Et1);auto Pij2 = Pij.in(Et2);auto Pij3 = Pij.in(Et3);
+//    auto Pji1 = Pji.in(Et1);auto Pji2 = Pji.in(Et2);auto Pji3 = Pji.in(Et3);
+//    auto Qij1 = Qij.in(Et1);auto Qij2 = Qij.in(Et2);auto Qij3 = Qij.in(Et3);
+//    auto Qji1 = Qji.in(Et1);auto Qji2 = Qji.in(Et2);auto Qji3 = Qji.in(Et3);
+//    /** Indices */
+//    auto branch_id_ph1 = get_branch_id_phase(1);
+//    auto branch_id_ph2 = get_branch_id_phase(2);
+//    auto branch_id_ph3 = get_branch_id_phase(3);
+//    auto branch_ph1 = get_branch_phase(1);
+//    auto branch_ph2 = get_branch_phase(2);
+//    auto branch_ph3 = get_branch_phase(3);
+//    auto ref_from_ph1 = fixed_from_branch_phase(1);
+//    auto ref_from_ph2 = fixed_from_branch_phase(2);
+//    auto ref_from_ph3 = fixed_from_branch_phase(3);
+//    auto ref_to_ph1 = fixed_to_branch_phase(1);
+//    auto ref_to_ph2 = fixed_to_branch_phase(2);
+//    auto ref_to_ph3 = fixed_to_branch_phase(3);
+//    auto from_ph1 = from_branch_phase(1);
+//    auto from_ph2 = from_branch_phase(2);
+//    auto from_ph3 = from_branch_phase(3);
+//    auto to_ph1 = to_branch_phase(1);
+//    auto to_ph2 = to_branch_phase(2);
+//    auto to_ph3 = to_branch_phase(3);
+//
+//    /** Power Flows */
+//    param<Cpx> Y0("Y0"), Y1("Y1"), Y2("Y2"), Y3("Y3");
+//    param<Cpx> Yc_fr("Yc_fr"), Yc_to("Yc_to");/* Line charging */
+//    var<Cpx> Vfr("Vfr"), Vto("Vto");
+//    var<Cpx> Sij("Sij"), Sji("Sji"), Vi("Vi"), Vj("Vj"), Vi1("Vi1"), Vi2("Vi2"), Vi3("Vi3"), Vj1("Vj1"), Vj2("Vj2"), Vj3("Vj3");
+//    /* Phase 1 */
+//    Yc_fr.real_imag(g_fr_.in(Et1),b_fr_.in(Et1));
+//    Yc_to.real_imag(g_to_.in(Et1),b_to_.in(Et1));
+//    Y0.real_imag(g.in(branch_id_ph1),b.in(branch_id_ph1));
+//    Y1.real_imag(g.in(branch_ph1),b.in(branch_ph1));
+//    Vfr.mag_ang(v_fr1,theta_fr1);
+//    Vto.mag_ang(v_to1,theta_to1);
+//    Vi.mag_ang(v.in(ref_from_ph1),theta.in(ref_from_ph1));
+//    Vj.mag_ang(v.in(ref_to_ph1),theta.in(ref_to_ph1));
+//    Vi1.mag_ang(v.in(from_ph1),theta.in(from_ph1));
+//    Vj1.mag_ang(v.in(to_ph1),theta.in(to_ph1));
+//    Sij.real_imag(Pij1,Qij1);
+//    Sji.real_imag(Pji1,Qji1);
+//
+//
+//    Constraint<Cpx> S_fr1("S_fr1"), S_to1("S_to1");
+//    S_fr1 = Sij - (conj(Y0)+conj(Yc_fr))*Vfr*conj(Vfr) + conj(Y0)*Vfr*conj(Vto) - (conj(Y1)*Vi)*(conj(Vi1) - conj(Vj1));
+//    S_to1 = Sji - (conj(Y0)+conj(Yc_to))*Vto*conj(Vto) + conj(Y0)*Vto*conj(Vfr) - (conj(Y1)*Vj)*(conj(Vj1) - conj(Vi1));
+//    ODO->add(S_fr1.in(Et1)==0);
+//    ODO->add(S_to1.in(Et1)==0);
+//    /* Phase 2 */
+//    Yc_fr.real_imag(g_fr_.in(Et2),b_fr_.in(Et2));
+//    Yc_to.real_imag(g_to_.in(Et2),b_to_.in(Et2));
+//    Y0.real_imag(g.in(branch_id_ph2),b.in(branch_id_ph2));
+//    Y2.real_imag(g.in(branch_ph2),b.in(branch_ph2));
+//
+//    Vfr.mag_ang(v_fr2,theta_fr2);
+//    Vto.mag_ang(v_to2,theta_to2);
+//    Vi.mag_ang(v.in(ref_from_ph2),theta.in(ref_from_ph2));
+//    Vj.mag_ang(v.in(ref_to_ph2),theta.in(ref_to_ph2));
+//    Vi2.mag_ang(v.in(from_ph2),theta.in(from_ph2));
+//    Vj2.mag_ang(v.in(to_ph2),theta.in(to_ph2));
+//
+//    Sij.real_imag(Pij2,Qij2);
+//    Sji.real_imag(Pji2,Qji2);
+//    Constraint<Cpx> S_fr2("S_fr2"), S_to2("S_to2");
+//    S_fr2 = Sij - (conj(Y0)+conj(Yc_fr))*Vfr*conj(Vfr) + conj(Y0)*Vfr*conj(Vto) - (conj(Y2)*Vi)*(conj(Vi2) - conj(Vj2));
+//    S_to2 = Sji - (conj(Y0)+conj(Yc_to))*Vto*conj(Vto) + conj(Y0)*Vto*conj(Vfr) - (conj(Y2)*Vj)*(conj(Vj2) - conj(Vi2));
+//    ODO->add(S_fr2.in(Et2)==0);
+//    ODO->add(S_to2.in(Et2)==0);
+//    /* Phase 3 */
+//    Yc_fr.real_imag(g_fr_.in(Et3),b_fr_.in(Et3));
+//    Yc_to.real_imag(g_to_.in(Et3),b_to_.in(Et3));
+//    Y0.real_imag(g.in(branch_id_ph3),b.in(branch_id_ph3));
+//    Y3.real_imag(g.in(branch_ph3),b.in(branch_ph3));
+//    Vfr.mag_ang(v_fr3,theta_fr3);
+//    Vto.mag_ang(v_to3,theta_to3);
+//    Vi.mag_ang(v.in(ref_from_ph3),theta.in(ref_from_ph3));
+//    Vj.mag_ang(v.in(ref_to_ph3),theta.in(ref_to_ph3));
+//    Vi3.mag_ang(v.in(from_ph3),theta.in(from_ph3));
+//    Vj3.mag_ang(v.in(to_ph3),theta.in(to_ph3));
+//
+//    Sij.real_imag(Pij3,Qij3);
+//    Sji.real_imag(Pji3,Qji3);
+//    Constraint<Cpx> S_fr3("S_fr3"), S_to3("S_to3");
+//    S_fr3 = Sij - (conj(Y0)+conj(Yc_fr))*Vfr*conj(Vfr) + conj(Y0)*Vfr*conj(Vto) - (conj(Y3)*Vi)*(conj(Vi3) - conj(Vj3));
+//    S_to3 = Sji - (conj(Y0)+conj(Yc_to))*Vto*conj(Vto) + conj(Y0)*Vto*conj(Vfr) - (conj(Y3)*Vj)*(conj(Vj3) - conj(Vi3));
+//    ODO->add(S_fr3.in(Et3)==0);
+//    ODO->add(S_to3.in(Et3)==0);
+//    //        ODO->print();
+//    //        exit(-1);
+//    //
+//    //    /** Power loss variables */
+//    //    var<Real> ploss("ploss");
+//    //    var<Real> qloss("qloss");
+//    //    if (pmt==DISTF || pmt==CDISTF) {
+//    //        ODO->add(ploss.in(Et));
+//    //        ODO->add(qloss.in(Et));
+//    //    }
+//    //
+//    /** Loss constraint */
+//    //    Constraint<> PLosses1("PLosses1");
+//    //    PLosses1 = Pij + Pji;
+//    //    ODO->add(PLosses1.in(Et) >= 0.004149/nb_branches*Pij);
+//    //
+//    //    Constraint<> PLosses2("PLosses2");
+//    //    PLosses2 = Pij + Pji;
+//    //    ODO->add(PLosses2.in(Et) >= 0.004149/nb_branches*Pji);
+//    //
+//    //    Constraint<> QLosses("QLosses");
+//    //    QLosses = Qij + Qji;
+//    //    ODO->add(QLosses.in(Et) >= 0);
+//    //
+//    /** OBJECTIVE FUNCTION */
+//    //check pot_gen
+//    func<> obj = product(c1.in(exist_Gt), Pg_.in(exist_Gt)) + product(c1.in(pot_Gt), Pg_.in(pot_Gt)) + product(c2.in(exist_Gt), pow(Pg_.in(exist_Gt),2)) + product(c2.in(pot_Gt), Pg2.in(pot_Gt)) + sum(c0.in(exist_Gt));
+//    //    obj *= 12./months.size();
+//    //    obj += nT*product(c0.in(pot_G_ph),w_g);
+//    obj += 1e-3*product(gen_capcost.in(pot_G_ph), w_g);
+//    obj += 1e-3*product(inverter_capcost.in(pot_B_ph), w_b);
+//    obj += 1e-3*product(expansion_capcost.in(pot_E_ph), w_e);
+//    obj += 1e-3*product(pv_capcost.in(pot_PV_ph), w_pv);
+//    obj += 1e-3*product(pv_varcost.in(pot_PV_ph), Pv_cap);
+//    ODO->min(obj);
+//    //    obj += sum(Pg);
+//    //    ODO->min(sum(Pg));
+//    //    func<> obj = product(c2.in(Gt), pow(Pg.in(Gt),2));
+//    //    ODO->min(obj);
+//
+//    /** CONSTRAINTS **/
+//
+//    /** Voltage magnitude at source bus **/
+//    //    indices ref_id("ref_id");
+//    //    ref_id.insert(ref_bus);
+//    //    ref_id = indices(T,phases,ref_id);
+//    //    Constraint<> fix_voltage_mag("fix_voltage_mag");
+//    //    if(pmt==ACPOL){
+//    //        fix_voltage_mag += v.in(ref_id) - vm_s_;
+//    //    }
+//    //    else {
+//    //        fix_voltage_mag += pow(vr.in(ref_id),2) + pow(vi.in(ref_id),2) - pow(vm_s_.in(ref_id),2);
+//    //    }
+//    //    ODO->add(fix_voltage_mag.in(ref_id)==0);
+//
+//
+//    /** Voltage angle at source bus **/
+//    //    Constraint<> fix_voltage_ang("fix_voltage_ang");
+//    //    if(pmt==ACPOL){
+//    //        fix_voltage_ang += theta.in(ref_id) - theta_s_.in(ref_id);
+//    //    }
+//    //    else {
+//    //        fix_voltage_ang += vi.in(ref_id) - theta_s_.in(ref_id)*vr.in(ref_id);
+//    //    }
+//    //    ODO->add(fix_voltage_ang.in(ref_id)==0);
+//
+//    /** FLOW CONSERVATION **/
+//
+//    /** KCL Flow conservation */
+//    Constraint<> KCL_P("KCL_P");
+//    Constraint<> KCL_Q("KCL_Q");
+//    KCL_P  = sum(Pij, out_arcs) + sum(Pji, in_arcs) + pl.in(Nt) - sum(Pg, gen_nodes) - sum(Pv, PV_nodes) - sum(Pb, batt_nodes) - sum(Pw, Wind_nodes);
+//    KCL_Q  = sum(Qij, out_arcs) + sum(Qji, in_arcs) + ql.in(Nt)  - sum(Qg, gen_nodes);
+//    KCL_P += gs_.in(Nt)*pow(v.in(Nt),2);
+//    KCL_Q -= bs_.in(Nt)*pow(v.in(Nt),2);
+//    ODO->add(KCL_P.in(Nt) == 0);
+//    ODO->add(KCL_Q.in(Nt) == 0);
+//
+//    /**  THERMAL LIMITS **/
+//
+//    /*  Thermal Limit Constraints for existing lines */
+//    Constraint<> Thermal_Limit_from("Thermal_Limit_from");
+//    Thermal_Limit_from += pow(Pij.in(exist_Et), 2) + pow(Qij.in(exist_Et), 2);
+//    Thermal_Limit_from -= pow(S_max.in(exist_Et), 2);
+//    ODO->add(Thermal_Limit_from.in(exist_Et) <= 0);
+//
+//    Constraint<> Thermal_Limit_to("Thermal_Limit_to");
+//    Thermal_Limit_to += pow(Pji.in(exist_Et), 2) + pow(Qji.in(exist_Et), 2);
+//    Thermal_Limit_to -= pow(S_max.in(exist_Et), 2);
+//    ODO->add(Thermal_Limit_to.in(exist_Et) <= 0);
+//
+//
+//    /*  Thermal Limit Constraints for expansion edges */
+//    Constraint<> Thermal_Limit_from_exp("Thermal_Limit_From_Exp");
+//    Thermal_Limit_from_exp += pow(Pij.in(pot_Et), 2) + pow(Qij.in(pot_Et), 2);
+//    Thermal_Limit_from_exp -= pow(w_e.in(pot_Et),2)*pow(S_max.in(pot_Et), 2);
+//    ODO->add(Thermal_Limit_from_exp.in(pot_Et) <= 0);
+//
+//    Constraint<> Thermal_Limit_to_exp("Thermal_Limit_to_Exp");
+//    Thermal_Limit_to_exp += pow(Pji.in(pot_Et), 2) + pow(Qji.in(pot_Et), 2);
+//    Thermal_Limit_to_exp -= pow(w_e.in(pot_Et),2)*pow(S_max.in(pot_Et), 2);
+//    ODO->add(Thermal_Limit_to_exp.in(pot_Et) <= 0);
+//
+//    /**  GENERATOR INVESTMENT **/
+//
+//    /*  On/Off status */
+//    Constraint<> OnOff_maxP("OnOff_maxP");
+//    OnOff_maxP += Pg_.in(pot_Gt) - pg_max.in(pot_Gt)*w_g.in(pot_Gt);
+//    ODO->add(OnOff_maxP.in(pot_Gt) <= 0);
+//
+//    Constraint<> Perspective_OnOff("Perspective_OnOff");
+//    Perspective_OnOff += pow(Pg_.in(pot_Gt),2) - Pg2.in(pot_Gt)*w_g.in(pot_Gt);
+//    ODO->add(Perspective_OnOff.in(pot_Gt) <= 0);
+//
+//    Constraint<> OnOff_maxQ("OnOff_maxQ");
+//    OnOff_maxQ += Qg.in(pot_Gt) - qg_max.in(pot_Gt)*w_g.in(pot_Gt);
+//    ODO->add(OnOff_maxQ.in(pot_Gt) <= 0);
+//
+//    Constraint<> OnOff_maxQ_N("OnOff_maxQ_N");
+//    OnOff_maxQ_N += Qg.in(pot_Gt) - qg_min.in(pot_Gt)*w_g.in(pot_Gt);
+//    ODO->add(OnOff_maxQ_N.in(pot_Gt) >= 0);
+//
+//    /**  PV **/
+//
+//    /*  On/Off on Potential PV */
+//    Constraint<> OnOffPV("OnOffPV");
+//    OnOffPV += Pv_cap.in(pot_PV_ph) - w_pv*pv_max.in(pot_PV_ph);
+//    ODO->add(OnOffPV.in(pot_PV_ph) <= 0);
+//
+//    /*  Max Cap on Potential PV */
+//    Constraint<> MaxCapPV("MaxCapPV");
+//    MaxCapPV += Pv.in(pot_PVt) - Pv_cap.in(pot_PVt)*pv_out.in(pot_PVt);
+//    ODO->add(MaxCapPV.in(pot_PVt) <= 0);
+//
+//    /*  Existing PV */
+//    Constraint<> existPV("existPV");
+//    existPV += Pv.in(exist_PVt) - pv_max.in(exist_PVt)*pv_out.in(exist_PVt);
+//    ODO->add(existPV.in(exist_PVt) <= 0);
+//
+//
+//    /**  BATTERIES **/
+//
+//    /*  Apparent Power Limit on Potential Batteries */
+//    Constraint<> Apparent_Limit_Batt_Pot("Apparent_Limit_Batt_Potential");
+//    Apparent_Limit_Batt_Pot += pow(Pb.in(pot_Bt), 2) + pow(Qb.in(pot_Bt), 2);
+//    Apparent_Limit_Batt_Pot -= pow(w_b.in(pot_Bt),2)*pow(pb_max.in(pot_Bt), 2);
+//    ODO->add(Apparent_Limit_Batt_Pot.in(pot_Bt) <= 0);
+//
+//    /*  Apparent Power Limit on Existing Batteries */
+//    Constraint<> Apparent_Limit_Batt("Apparent_Limit_Batt_Existing");
+//    Apparent_Limit_Batt += pow(Pb.in(exist_Bt), 2) + pow(Qb.in(exist_Bt), 2);
+//    Apparent_Limit_Batt -= pow(pb_max.in(exist_Bt), 2);
+//    ODO->add(Apparent_Limit_Batt.in(exist_Bt) <= 0);
+//
+//
+//    /*  State Of Charge */
+//    auto T1 = T.exclude(T.first());/**< Excluding first time step */
+//    auto Tn = T.exclude(T.last());/**< Excluding last time step */
+//    Bt1 = indices(T1,B_ph);
+//    Btn = indices(Tn,B_ph);
+//    Constraint<> State_Of_Charge("State_Of_Charge");
+//    State_Of_Charge = Sc.in(Bt1) - Sc.in(Btn) + Pb_.in(Bt1);
+//    ODO->add(State_Of_Charge.in(Bt1) == 0);
+//
+//    /*  State Of Charge 0 */
+//    auto T0 = indices("T0");
+//    T0.insert(T.first());
+//    auto Bat0 = indices(T0,B_ph);
+//    Constraint<> State_Of_Charge0("State_Of_Charge0");
+//    State_Of_Charge0 = Sc.in(Bat0);
+//    ODO->add(State_Of_Charge0.in(Bat0) == 0);
+//    Constraint<> Pb0("Pb0");
+//    Pb0 = Pb_.in(Bat0);
+//    ODO->add(Pb0.in(Bat0) == 0);
+//
+//    /*  EFFICIENCIES */
+//    Constraint<> DieselEff("DieselEff");
+//    DieselEff += Pg - gen_eff.in(Gt)*Pg_;
+//    ODO->add(DieselEff.in(Gt) == 0);
+//
+//    auto exist_batt_eff = indices(exist_Bt,_eff_pieces);
+//    auto pot_batt_eff = indices(pot_Bt,_eff_pieces);
+//    Constraint<> EfficiencyExist("BatteryEfficiencyExisting");
+//    EfficiencyExist += Pb.in(exist_batt_eff)  - eff_a.in(exist_batt_eff)*Pb_.in(exist_batt_eff) - eff_b.in(exist_batt_eff);
+//    ODO->add(EfficiencyExist.in(exist_batt_eff) <= 0);
+//
+//    Constraint<> EfficiencyPot("BatteryEfficiencyPotential");
+//    EfficiencyPot += Pb.in(pot_batt_eff)  - eff_a.in(pot_batt_eff)*Pb_.in(pot_batt_eff) - eff_b.in(pot_batt_eff)*w_b.in(pot_batt_eff);
+//    ODO->add(EfficiencyPot.in(pot_batt_eff) <= 0);
+//    //
+//    //
+//    //    for (auto n:nodes) {
+//    //        auto b = (Bus*)n;
+//    //        //        b->print();
+//    //        for (auto i = 0; i < b->_pot_gen.size(); i++) {
+//    //            auto gen = b->_pot_gen[i];
+//    //            if(min_diesel_invest.eval(gen->_name)==max_diesel_invest.eval(gen->_name)){
+//    //                Constraint FixedDieselInvest("FixedDieselInvest"+gen->_name);
+//    //                FixedDieselInvest += w_g(gen->_name);
+//    //                ODO->add(FixedDieselInvest == 1);
+//    //                for (auto j = i+1; j < b->_pot_gen.size(); j++) {
+//    //                    auto gen2 = b->_pot_gen[j];
+//    //                    if (gen2->_gen_type==gen->_gen_type) {
+//    //                        Constraint FixedDieselInvest("FixedDieselInvest"+gen2->_name);
+//    //                        FixedDieselInvest += w_g(gen2->_name);
+//    //                        ODO->add(FixedDieselInvest == 1);
+//    //                    }
+//    //                }
+//    //            }
+//    //            else {
+//    //                Constraint MinDieselInvest("MinDieselInvest_"+b->_name+"_DG"+to_string(gen->_gen_type));
+//    //                MinDieselInvest += w_g(gen->_name);
+//    //                for (auto j = i+1; j < b->_pot_gen.size(); j++) {
+//    //                    auto gen2 = b->_pot_gen[j];
+//    //                    if (gen2->_gen_type==gen->_gen_type) {
+//    //                        MinDieselInvest += w_g(gen2->_name);
+//    //                    }
+//    //                }
+//    //                auto rhs = min_diesel_invest.eval(gen->_name);
+//    //                if (rhs>0) {
+//    //                    ODO->add(MinDieselInvest >= rhs);
+//    //                }
+//    //            }
+//    //        }
+//    //        for (auto i = 0; i < b->_pot_bat.size(); i++) {
+//    //            auto bat = b->_pot_bat[i];
+//    //            if(min_batt_invest.eval(bat->_name)==max_batt_invest.eval(bat->_name)){
+//    //                Constraint FixedBattInvest("FixedBattInvest"+bat->_name);
+//    //                FixedBattInvest += w_b(bat->_name);
+//    //                ODO->add(FixedBattInvest == 1);
+//    //                for (auto j = i+1; j < b->_pot_bat.size(); j++) {
+//    //                    auto bat2 = b->_pot_bat[j];
+//    //                    if (bat2->_bat_type==bat->_bat_type) {
+//    //                        Constraint FixedBattInvest("FixedBattInvest"+bat2->_name);
+//    //                        FixedBattInvest += w_b(bat2->_name);
+//    //                        ODO->add(FixedBattInvest == 1);
+//    //                    }
+//    //                }
+//    //            }
+//    //            else {
+//    //                Constraint MinBattInvest("MinBattInvest_"+b->_name+"_DG"+to_string(bat->_bat_type));
+//    //                MinBattInvest += w_b(bat->_name);
+//    //                for (auto j = i+1; j < b->_pot_bat.size(); j++) {
+//    //                    auto bat2 = b->_pot_bat[j];
+//    //                    if (bat2->_bat_type==bat->_bat_type) {
+//    //                        MinBattInvest += w_b(bat2->_name);
+//    //                    }
+//    //                }
+//    //                auto rhs = min_batt_invest.eval(bat->_name);
+//    //                if (rhs>0) {
+//    //                    ODO->add(MinBattInvest >= rhs);
+//    //                }
+//    //            }
+//    //        }
+//    //    }
+//    //    ODO->print();
+//    bool build_contingency = true;
+//    if(build_contingency){
+//        DebugOn("Building resiliency constraints" << endl);
+//        Gt_c = get_conting_gens(_res_scenarios);
+//        Et_c = get_conting_arcs(_res_scenarios);
+//        auto ConT = get_time_ids_conting(_res_scenarios);
+//        PVt_c = indices(ConT, PV_ph);
+//        Bt_c = indices(ConT, B_ph);
+//    }
+//
+//
+//    return ODO;
+//}
 
 
 shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, double tol, int max_nb_hours, bool networked){
