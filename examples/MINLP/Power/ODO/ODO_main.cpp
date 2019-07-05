@@ -199,27 +199,29 @@ int main (int argc, char * argv[])
         }
     }
     else {
+        int precision;
         solver<> ACUC(ODO,ipopt);
         return_status = ACUC.run(output=5, tol = 1e-5);
-        ODO->print_solution();
-        auto pg = ODO->get_var<double>("Pg");
-        pg.print_vals(10);
-        auto pg_ = ODO->get_var<double>("Pg_");
-        pg_.print_vals(10);
-        auto pw = ODO->get_var<double>("Pw");
-        pw.print_vals(10);
-        auto pv = ODO->get_var<double>("Pv");
-        pv.print_vals(10);
-        auto pb = ODO->get_var<double>("Pb");
-        pb.print_vals(10);
-        auto wb = ODO->get_var<double>("w_b");
-        wb.print_vals(10);
-        auto wpv = ODO->get_var<double>("w_pv");
-        wpv.print_vals(10);
-        auto we = ODO->get_var<double>("w_e");
-        we.print_vals(10);
-        auto wg = ODO->get_var<double>("w_g");
-        wg.print_vals(10);
+//        ODO->print_solution();
+        ODO->print_nnz_solution(precision=5,tol=1e-4);
+//        auto pg = ODO->get_var<double>("Pg");
+//        pg.print_vals(10);
+//        auto pg_ = ODO->get_var<double>("Pg_");
+//        pg_.print_vals(10);
+//        auto pw = ODO->get_var<double>("Pw");
+//        pw.print_vals(10);
+//        auto pv = ODO->get_var<double>("Pv");
+//        pv.print_vals(10);
+//        auto pb = ODO->get_var<double>("Pb");
+//        pb.print_vals(10);
+//        auto wb = ODO->get_var<double>("w_b");
+//        wb.print_vals(10);
+//        auto wpv = ODO->get_var<double>("w_pv");
+//        wpv.print_vals(10);
+//        auto we = ODO->get_var<double>("w_e");
+//        we.print_vals(10);
+//        auto wg = ODO->get_var<double>("w_g");
+//        wg.print_vals(10);
         solver_time_end = get_wall_time();
         solve_time = solver_time_end - solver_time_start;
         DebugOn("Solve time = " << solve_time << endl);
@@ -231,7 +233,7 @@ int main (int argc, char * argv[])
         else {
             lb = ODO->get_obj_val();
             DebugOn("Lower Bound = " << lb << endl);
-            ODO->print_solution(10);
+            ODO->print_nnz_solution();
 //            DebugOn("Rounding current solution..." << endl);
 //            ODO->round_solution();
 //            if(ODO->is_feasible(tol=1e-5)){
@@ -249,7 +251,7 @@ int main (int argc, char * argv[])
 //                ODO->_first_run = true;
 //                solver ACUC_CPX(*ODO,ipopt);
 //                return_status = ACUC_CPX.run(output, relax = false, tol = 1e-6);
-                return_status = ACUC.run(output, relax = false, tol = 1e-6);
+                return_status = ACUC.run(output, tol = 1e-6, "ma97");
                 if (return_status != 100) {
                     clog << "Cannot compute lower bound!\n";
                 }

@@ -111,6 +111,8 @@ public:
     double  _tol = 1e-6;
     unsigned _nb_years = 5;
     unsigned _nb_hours = 24;
+    unsigned _nb_fuel_hours = 12; /**< Number of hours of fuel availiability is case of a natural disaster */
+    bool     _networked = false; /**< Allow networking of different microgrids */
     double _inflation_rate = 0.02, _demand_growth = 0.02;
     double _pv_cap_cost = 2500, _wind_cap_cost = 2500, _pv_eff = 0.8, _wind_eff = 0.8;
     bool add_3d_nlin = true;
@@ -229,7 +231,7 @@ public:
     indices typical_days = time("week","peak","weekend");
 //    typical_days._name = "typical_days";
     //    indices typical_days = time("week");
-    indices phase_T, T= indices("Time"), T_c= indices("Time_c"), Nt = indices("Nt"), Nt_c = indices("Nt_c"), Lt = indices("Lt"), Nt_load, Nt_no_load, Et = indices("Et"),Et_c = indices("Et_c"), Et1 = indices("Et1"), Et2 = indices("Et2"), Et3 = indices("Et3"), Et1_c = indices("Et1_c"), Et2_c = indices("Et2_c"), Et3_c = indices("Et3_c"), pot_G_ph = indices("pot_Gph"), pot_Wind_ph = indices("pot_Wind_ph"), pot_PV_ph = indices("pot_PVph"), pot_E_ph = indices("pot_Eph"), pot_B_ph = indices("pot_Bph"), G_ph= indices("Gph"),Wind_ph= indices("Wph"),PV_ph= indices("PVph"), N_ph= indices("Nph"), exist_G_ph = indices("Exist_Gph"),exist_PV_ph = indices("Exist_PVph"),exist_Wind_ph = indices("Exist_Wind_ph"), exist_B_ph = indices("Exist_Bph"), B_ph = indices("Bph"), exist_E_ph = indices("Exist_Eph"), E_ph = indices("Eph"), E_ph1 = indices("Eph1"),E_ph2 = indices("Eph2"), E_ph3 = indices("Eph3"), E_ph1_c = indices("Eph1_c"),E_ph2_c = indices("Eph2_c"), E_ph3_c = indices("Eph3_c"), Gt = indices("Gt"),Gt_c = indices("Gt_c"), PVt = indices("PVt"), PVt_c = indices("PVt_c"), Windt = indices("Windt"), Windt_c = indices("Windt_c"), exist_Gt= indices("exit_Gt"), exist_PVt= indices("exit_PVt"), exist_Windt= indices("exit_Windt"), exist_Bt= indices("exit_Bt"), exist_Et= indices("exit_Et"), pot_Et= indices("pot_Et"), pot_PVt= indices("pot_PVt"),pot_Windt= indices("pot_Windt"), pot_Gt= indices("pot_Gt"), pot_Bt= indices("pot_Bt"), Bt = indices("Bt"), Bt_c = indices("Bt_c"), Btn = indices("Btn"), Bt1 = indices("Bt1"), Gt1, Wt, PV_pot_t, pot_gen, pot_batt, pot_edges, pot_pv;
+    indices phase_T, T= indices("Time"), T_c= indices("Time_c"), Nt = indices("Nt"), N_out = indices("N_out"), Nt_c = indices("Nt_c"), Lt = indices("Lt"), Nt_load, Nt_no_load, Et = indices("Et"),Et_c = indices("Et_c"), Et1 = indices("Et1"), Et2 = indices("Et2"), Et3 = indices("Et3"), Et1_c = indices("Et1_c"), Et2_c = indices("Et2_c"), Et3_c = indices("Et3_c"), pot_G_ph = indices("pot_Gph"), pot_Wind_ph = indices("pot_Wind_ph"), pot_PV_ph = indices("pot_PVph"), pot_E_ph = indices("pot_Eph"), pot_B_ph = indices("pot_Bph"), G_ph= indices("Gph"),Wind_ph= indices("Wph"),PV_ph= indices("PVph"), N_ph= indices("Nph"), exist_G_ph = indices("Exist_Gph"),exist_PV_ph = indices("Exist_PVph"),exist_Wind_ph = indices("Exist_Wind_ph"), exist_B_ph = indices("Exist_Bph"), B_ph = indices("Bph"), exist_E_ph = indices("Exist_Eph"), E_ph = indices("Eph"), E_ph1 = indices("Eph1"),E_ph2 = indices("Eph2"), E_ph3 = indices("Eph3"), E_ph1_c = indices("Eph1_c"),E_ph2_c = indices("Eph2_c"), E_ph3_c = indices("Eph3_c"), Gt = indices("Gt"),Gt_c = indices("Gt_c"), PVt = indices("PVt"), PVt_c = indices("PVt_c"), Windt = indices("Windt"), Windt_c = indices("Windt_c"), exist_Gt= indices("exit_Gt"), exist_PVt= indices("exit_PVt"), exist_Windt= indices("exit_Windt"), exist_Bt= indices("exit_Bt"), exist_Et= indices("exit_Et"), pot_Et= indices("pot_Et"), pot_PVt= indices("pot_PVt"),pot_Windt= indices("pot_Windt"), pot_Gt= indices("pot_Gt"), pot_Bt= indices("pot_Bt"), Bt = indices("Bt"), Bt_c = indices("Bt_c"), Btn = indices("Btn"), Bt1 = indices("Bt1"), Gt1, Wt, PV_pot_t, pot_gen, pot_batt, pot_edges, pot_pv;
     indices Et_opt, Gt_opt, Bt_opt, Bt1_opt, Wt_opt, PVt_opt;
     indices cross_phase = indices("cross_phase");
     indices N_ph1 = indices("Nph1"),N_ph2 = indices("Nph2"), N_ph3 = indices("Nph3");
@@ -299,10 +301,11 @@ public:
     /** get set indexed by bus pairs in the chordal extension */
     gravity::indices get_bus_pairs_chord();
 
-    indices get_conting_buses(const map<string,shared_ptr<Scenario>>& conts) const;
+    indices get_tielines() const;
     indices get_conting_arcs(const map<string,shared_ptr<Scenario>>& conts) const;
     indices get_conting_gens(const map<string,shared_ptr<Scenario>>& conts) const;
     indices get_conting_nodes(const map<string,shared_ptr<Scenario>>& conts) const;
+    indices get_outaged_nodes(const map<string,shared_ptr<Scenario>>& conts) const;
     indices get_conting_arcs_pot(const map<string,shared_ptr<Scenario>>& conts) const;
     indices get_conting_gens_pot(const map<string,shared_ptr<Scenario>>& conts) const;
     indices get_conting_arcs_exist(const map<string,shared_ptr<Scenario>>& conts) const;
@@ -351,6 +354,10 @@ public:
     indices Wind_per_node_time() const;
     indices out_arcs_per_node_time() const;
     indices in_arcs_per_node_time() const;
+    
+    
+    indices gens_cont(const map<string,shared_ptr<Scenario>>& scenarios) const;
+    indices gens_time(const indices& g_conts) const;
     
     indices gens_per_node_time_cont(const map<string,shared_ptr<Scenario>>& scenarios) const;
     indices PV_per_node_time_cont() const;

@@ -1400,7 +1400,8 @@ namespace gravity {
         }
         
         type get_obj_val() const{
-            return _obj->get_val();
+            _obj->uneval();
+            return _obj->eval();
         }
         
         void print_obj_val(int prec = 5) const{
@@ -2582,6 +2583,15 @@ namespace gravity {
             for (auto &v_pair:_vars) {
                 auto v = v_pair.second;
                 v->print_vals(prec);
+            }
+        }
+        
+        /** Prints the non-zero values of the variables */
+        void print_nnz_solution(int prec=5, double tol = 1e-6) const{
+            print_obj_val(prec);
+            for (auto &v_pair:_vars) {
+                auto v = v_pair.second;
+                v->print_nnz_vals(prec,tol);
             }
         }
         

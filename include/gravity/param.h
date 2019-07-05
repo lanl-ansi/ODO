@@ -103,6 +103,8 @@ namespace gravity {
         
         virtual void print_vals(int prec){};
         
+        virtual void print_nnz_vals(int prec, double tol){};
+        
         virtual void print_symbolic() const{};
         
         virtual void print(int prec){};                
@@ -152,7 +154,9 @@ namespace gravity {
                 }
                 return _indices->_ids->at(inst1).at(inst2);
             }
-            throw invalid_argument("Calling get_id_inst(size_t inst1, size_t inst2) on a non-indexed param\n");
+            if(inst1>0)
+                throw invalid_argument("Calling get_id_inst(size_t inst1, size_t inst2) on a non-indexed param\n");
+            return get_id_inst(inst2);
         };
 
 
@@ -949,7 +953,7 @@ namespace gravity {
                 return index;
             }
             else {
-                Warning("WARNING: calling add_val(const string& key, T val) with an existing key, adding to existing value" << endl);
+                WarningOff("WARNING: calling add_val(const string& key, T val) with an existing key, adding to existing value" << endl);
                 set_val(pp.first->second,eval(pp.first->second)+val);
                 return pp.first->second;
             }
@@ -1846,6 +1850,63 @@ namespace gravity {
             return max_size;
         }
         
+        /** Prints the non-zero values of the variables */
+        string to_str_nnz_vals(int prec = 10, double tol = 1e-6) {
+            string str = get_name(false,true);
+            auto name = str.substr(0, str.find_last_of("."));
+            str = name;
+                str += " = { \n";
+                auto space_size = str.size();
+                if (is_matrix()) {
+                    auto max_cell_size = get_max_cell_size();
+                    for (size_t i = 0; i<_dim[0]; i++) {
+                        str.insert(str.end(), space_size, ' ');
+                        str += "|";
+                        for (size_t j = 0; j<_dim[1]; j++) {
+                            auto cell = to_str(i,j,prec);
+                            auto cell_size = cell.size();
+                            cell.insert(0, floor((max_cell_size+1 - cell_size)/2.), ' ');
+                            cell.append(ceil((max_cell_size+1 - cell_size)/2.), ' ');
+                            str += cell;
+                            if(j!=_dim[1]-1){
+                                str += " ";
+                            }
+                        }
+                        str += "|\n";
+                    }
+                    str += "}\n";
+                    return str;
+                }
+                if(_indices) {
+                    if (is_indexed()) {
+                        for (size_t i = 0; i < _dim[0]; i++) {
+                            if(abs(eval(i)) >tol){
+                                str += "[" + _indices->_keys->at(get_id_inst(i)) + "] = " + to_string_with_precision(eval(i), prec);
+                                str += " \n";
+                            }
+                        }
+                    }
+                    else {
+                        for (size_t i = 0; i < _dim[0]; i++) {
+                            if(abs(eval(i)) >tol){
+                                str += "[" + _indices->_keys->at(i) + "] = " + to_string_with_precision(eval(i), prec);
+                                str += " \n";
+                            }
+                        }
+                    }
+                }
+                else {
+                    for (size_t idx = 0; idx < _val->size(); idx++) {
+                        if(abs(eval(idx)) >tol){
+                            str += "["+to_string(idx) + "] = " + to_string_with_precision(eval(idx),prec);
+                            str += " \n";
+                        }
+                    }
+                }
+                str += "};\n";
+            return str;
+        }
+        
         string to_str_vals(bool vals, int prec = 10) {
             string str = get_name(false,true);
             auto name = str.substr(0, str.find_last_of("."));
@@ -1905,6 +1966,10 @@ namespace gravity {
 
         void print_vals(int prec){
             cout << this->to_str_vals(true, prec);
+        }
+        
+        void print_nnz_vals(int prec,double tol){
+            cout << this->to_str_nnz_vals(prec, tol);
         }
         
         void print(int prec) {
@@ -1994,7 +2059,13 @@ namespace gravity {
         template<class T=type, typename enable_if<is_arithmetic<T>::value>::type* = nullptr>
         void round_vals_(){
             for (size_t i = 0; i < get_dim(); i++) {
-                _val->at(i) = std::round((T)_val->at(i));
+                if(_val->at(i) > 0.1){
+                    _val->at(i) = 1;
+                }
+                else {
+                    _val->at(i) = 0;
+                }
+//                _val->at(i) = std::round((T)_val->at(i));
             }
         };
         

@@ -1406,7 +1406,7 @@
         "10": {
             "bus_type": 1,
             "index": 10,
-            "microgrid_id": 1,
+            "microgrid_id": 2,
             "name": "675",
             "nominal_voltage": 4160.0,
             "status": 1,
@@ -1434,7 +1434,7 @@
         "11": {
             "bus_type": 1,
             "index": 11,
-            "microgrid_id": 1,
+            "microgrid_id": 2,
             "name": "684",
             "nominal_voltage": 4160.0,
             "status": 1,
@@ -1462,7 +1462,7 @@
         "12": {
             "bus_type": 1,
             "index": 12,
-            "microgrid_id": 1,
+            "microgrid_id": 2,
             "name": "611",
             "nominal_voltage": 4160.0,
             "status": 1,
@@ -1490,7 +1490,7 @@
         "13": {
             "bus_type": 1,
             "index": 13,
-            "microgrid_id": 1,
+            "microgrid_id": 2,
             "name": "652",
             "nominal_voltage": 4160.0,
             "status": 1,
@@ -1574,7 +1574,7 @@
         "16": {
             "bus_type": 1,
             "index": 16,
-            "microgrid_id": 2,
+            "microgrid_id": 1,
             "name": "634",
             "nominal_voltage": 480.0,
             "status": 1,
@@ -1658,7 +1658,7 @@
         "4": {
             "bus_type": 1,
             "index": 4,
-            "microgrid_id": 1,
+            "microgrid_id": 2,
             "name": "671",
             "nominal_voltage": 4160.0,
             "status": 1,
@@ -1686,7 +1686,7 @@
         "5": {
             "bus_type": 1,
             "index": 5,
-            "microgrid_id": 1,
+            "microgrid_id": 2,
             "name": "680",
             "nominal_voltage": 4160.0,
             "status": 1,
@@ -1714,7 +1714,7 @@
         "6": {
             "bus_type": 1,
             "index": 6,
-            "microgrid_id": 2,
+            "microgrid_id": 1,
             "name": "633",
             "nominal_voltage": 4160.0,
             "status": 1,
@@ -1798,7 +1798,7 @@
         "9": {
             "bus_type": 1,
             "index": 9,
-            "microgrid_id": 1,
+            "microgrid_id": 2,
             "name": "692",
             "nominal_voltage": 4160.0,
             "status": 1,
@@ -1873,7 +1873,7 @@
     },
     "load": {
         "1": {
-            "critical": 0,
+            "critical": 1,
             "index": 1,
             "load_bus": 5,
             "microgrid_id": 1,
@@ -1999,7 +1999,7 @@
             "status": 1
         },
         "8": {
-            "critical": 1,
+            "critical": 0,
             "index": 8,
             "load_bus": 13,
             "microgrid_id": 1,

@@ -321,6 +321,9 @@ public:
     /** @brief Corresponding set of PV generators (potential)  */
     std::vector<PV*> _pot_pv;
     
+    /** @brief Corresponding set of PV generators (existing)  */
+    std::vector<PV*> _exist_pv;
+    
     /** @brief Corresponding set of battery inverters (potential + installed)  */
     std::vector<BatteryInverter*> _bat;
     

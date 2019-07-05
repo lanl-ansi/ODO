@@ -704,6 +704,9 @@ namespace gravity{
             return res;
         }
         
+        bool has(const string &key) const{
+            return _keys_map->count(key)>0;
+        }
         
         /** Excllude all keys that has key as a substring */
         indices exclude_sub(string key) const{

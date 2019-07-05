@@ -565,6 +565,8 @@ namespace gravity {
         void print();
         void print(int prec);
         void print_vals(int prec){param<type>::print_vals(prec);};
+        /** Prints the non-zero values of the variables */
+        void print_nnz_vals(int prec, double tol){param<type>::print_nnz_vals(prec,tol);};
         void print_symbolic() const{
             string str = this->_name;
             str += " ∈ [" + _lb->to_str() +"," + _ub->to_str() +"]^" + to_string(this->get_dim());
