@@ -2871,12 +2871,6 @@ int PowerNet::readODO(const string& fname){
     //    pl.print(true);
     
     clog << "Reading excel file complete" << std::endl;
-    if(_networked){
-        cout << endl << "Running in networked mode" << endl;
-    }
-    else {
-        cout << endl << "Running in isolated mode" << endl;
-    }
     cout << "Number of hours of fuel availibility = " << _nb_fuel_hours << endl;
     return 0;
 }
@@ -4283,6 +4277,13 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
 //        fix_voltage_ang += vi.in(ref_id) - theta_s_.in(ref_id)*vr.in(ref_id);
 //    }
 //    ODO->add(fix_voltage_ang.in(ref_id)==0);
+
+    if(_networked){
+        cout << endl << "Running in networked mode" << endl;
+    }
+    else {
+        cout << endl << "Running in isolated mode" << endl;
+    }
 
     
     /** Networking Constraints **/

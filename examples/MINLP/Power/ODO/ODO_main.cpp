@@ -33,9 +33,9 @@ int main (int argc, char * argv[])
     string downl_json_cmd, downl_xls_cmd;
     string Json_str, Xls_str;
     string Json, Invest, mtype = "ACRECT";
-    string solver_str="ipopt", default_str="no";
+    string solver_str="ipopt", default_str="no", networked_str="no";
     int output = 0;
-    bool relax = false, use_cplex = false, use_gurobi = false, default_args=false;
+    bool relax = false, use_cplex = false, use_gurobi = false, default_args=false, run_networked = false;
     double tol = 1e-6;
     string mehrotra = "no", log_level="0", nb_hours="6";
     double solver_time_end, total_time_end, solve_time, cont_solve_start, cont_solve_end, cont_solve_time, model_build_time = -1, total_time = -1;
@@ -50,6 +50,7 @@ int main (int argc, char * argv[])
     opt.add_option("t", "time", "time in hours (def. 1)", nb_hours );
     opt.add_option("m", "model", "power flow model: ACPOL/ACRECT/DISTFLOW/LINDISTFLOW (def. ACRECT)", mtype );
     opt.add_option("s", "solver", "Solvers: ipopt/cplex/gurobi, default = ipopt", solver_str);
+    opt.add_option("n", "networked", "Run in networked mode: yes/no, default = no", networked_str);
     opt.add_option("d", "default", "Use default arguments for input files: yes/no, default = no", default_str);
     
     /** parse the options and verify that all went well. If not, errors and help will be shown */
@@ -63,7 +64,11 @@ int main (int argc, char * argv[])
     Json = opt["j"];
     mtype = opt["m"];
     solver_str = opt["s"];
+    networked_str = opt["n"];
     default_str = opt["d"];
+    if (networked_str.compare("yes")==0) {
+        run_networked = true;
+    }
     if (opt["j"].empty() && default_str.compare("yes")==0) {
         default_args = true;
         cout << "Using default arguments for Json input file: https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json" << endl;
@@ -170,6 +175,7 @@ int main (int argc, char * argv[])
     DebugOn("nb installed lines = " << Nline << endl);
     DebugOn("number of buses = " << Nbus << endl);
 
+    grid._networked = run_networked;
     auto ODO = grid.build_ODO_model(pmt,output,tol,max_nb_hours);
 //    ODO->print();
 //    return 0;
