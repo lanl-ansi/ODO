@@ -207,7 +207,7 @@ int main (int argc, char * argv[])
     else {
         int precision;
         solver<> ACUC(ODO,ipopt);
-        return_status = ACUC.run(output=5, tol = 1e-5);
+        return_status = ACUC.run(output=5, tol = 1e-4);
 //        ODO->print_solution();
         ODO->print_nnz_solution(precision=5,tol=1e-4);
 //        auto pg = ODO->get_var<double>("Pg");
