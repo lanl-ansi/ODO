@@ -2274,7 +2274,7 @@ int PowerNet::readODO(const string& fname){
                         }
                     }
                     assert(max_d>=exist);
-                    for (auto i = exist; i<max_d - exist +1; i++) {
+                    for (auto i = exist; i<max_d - exist; i++) {
                         auto copy = _all_diesel_gens[index];
                         auto name = copy._name + "_Potential," + bus->_name + "," + "slot"+to_string(i);
                         auto gen = new Gen(bus, name, 0, copy._max_p, -copy._max_s, copy._max_s);
@@ -2411,7 +2411,7 @@ int PowerNet::readODO(const string& fname){
                         
                     }
                     assert(max_bat>=exist);
-                    for (unsigned i = exist; i<max_bat-exist+1; i++) {
+                    for (unsigned i = exist; i<max_bat-exist; i++) {
                         
                         for (int ph = 1; ph<=3; ph++) {
                             if(bus->_phases.count(ph)==0 || _all_battery_inverters[index]._phases.count(ph)==0){
@@ -3099,7 +3099,7 @@ void PowerNet::readJSON(const string& fname){
             g_to_.add_val(ph_key, g_to[i].GetDouble());
             shift_.add_val(ph_key, shift[i].GetDouble());
             tap_.add_val(ph_key, tap[i].GetDouble());
-            this->S_max.add_val(ph_key, rating[i].GetDouble());
+            this->S_max.add_val(ph_key, 10*rating[i].GetDouble());
         }
 //        br_r_.print();
         arma::cx_mat ymat_inv = arma::pinv(ymat);
@@ -4116,7 +4116,7 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     auto to_ph1 = to_branch_phase(1);
     auto to_ph2 = to_branch_phase(2);
     auto to_ph3 = to_branch_phase(3);
-    bool ACPower = true;
+    bool ACPower = false;
     if(ACPower){
         /** Power Flows */
         param<Cpx> Y0("Y0"), Y1("Y1"), Y2("Y2"), Y3("Y3");
@@ -4192,15 +4192,15 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     else { /* Just add loss constraints */
         Constraint<> Loss1("Loss1");
         Loss1 = Pij1 + Pji1;
-        ODO->add(Loss1.in(Et1_c)==0);
+        ODO->add(Loss1.in(Et1)==0);
         
         Constraint<> Loss2("Loss2");
         Loss2 = Pij2 + Pji2;
-        ODO->add(Loss2.in(Et2_c)==0);
+        ODO->add(Loss2.in(Et2)==0);
         
         Constraint<> Loss3("Loss3");
         Loss3 = Pij3 + Pji3;
-        ODO->add(Loss3.in(Et3_c)==0);
+        ODO->add(Loss3.in(Et3)==0);
     }
 
     var<> pls("pls", 0, 1);/**< percentage of real load shed */
@@ -4692,17 +4692,17 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
             ODO->add(S_to3_c.in(Et3_c)==0);
         }
         else { /* Just add loss constraints */
-            Constraint<> Loss1("Loss1");
+            Constraint<> Loss1("Loss1_c");
             Loss1 = Pij1_c + Pji1_c;
-            ODO->add(Loss1.in(Et1_c)>=0);
+            ODO->add(Loss1.in(Et1_c)==0);
             
-            Constraint<> Loss2("Loss2");
+            Constraint<> Loss2("Loss2_c");
             Loss2 = Pij2_c + Pji2_c;
-            ODO->add(Loss2.in(Et2_c)>=0);
+            ODO->add(Loss2.in(Et2_c)==0);
 
-            Constraint<> Loss3("Loss3");
+            Constraint<> Loss3("Loss3_c");
             Loss3 = Pij3_c + Pji3_c;
-            ODO->add(Loss3.in(Et3_c)>=0);
+            ODO->add(Loss3.in(Et3_c)==0);
         }
         
 //        Constraint<> BinaryCstrG("BinaryCstrG");
@@ -4725,7 +4725,7 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
         auto gens_time = this->gens_time(gens_cont);
         Constraint<> Fuel("Fuel");
         Fuel  = sum(Pg_c, gens_time);
-        ODO->add(Fuel.in(gens_cont) <= _nb_fuel_hours*pg_max.in(gens_cont));
+//        ODO->add(Fuel.in(gens_cont) <= _nb_fuel_hours*pg_max.in(gens_cont));
 //        Fuel.print();
         /** KCL Flow conservation in contingency/resiliency mode */
         Constraint<> KCL_P_c("KCL_P_c");

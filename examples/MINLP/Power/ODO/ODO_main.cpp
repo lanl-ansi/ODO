@@ -71,12 +71,12 @@ int main (int argc, char * argv[])
     }
     if (opt["j"].empty() && default_str.compare("yes")==0) {
         default_args = true;
-        cout << "Using default arguments for Json input file: https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json" << endl;
-        Json_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/IEEE13.json";
+        cout << "Using default arguments for Json input file: https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/NREL_v2.json" << endl;
+        Json_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/NREL_v2.json";
     }
     if (opt["i"].empty() && default_str.compare("yes")==0) {
-        cout << "Using default arguments for Excel input file: https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx" << endl;
-        Xls_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT.xlsx";
+        cout << "Using default arguments for Excel input file: https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT_NREL.xlsx" << endl;
+        Xls_str = "https://raw.githubusercontent.com/lanl-ansi/ODO/master/data_sets/Power/ODO_INPUT_NREL.xlsx";
     }
     if (solver_str.compare("gurobi")==0) {
         use_gurobi = true;
@@ -178,6 +178,7 @@ int main (int argc, char * argv[])
     grid._networked = run_networked;
     auto ODO = grid.build_ODO_model(pmt,output,tol,max_nb_hours);
 //    ODO->print();
+    
 //    return 0;
     
     
@@ -226,8 +227,10 @@ int main (int argc, char * argv[])
 //        wpv.print_vals(10);
 //        auto we = ODO->get_var<double>("w_e");
 //        we.print_vals(10);
-//        auto wg = ODO->get_var<double>("w_g");
-//        wg.print_vals(10);
+////        auto wg = ODO->get_var<double>("w_g");
+////        wg.print_vals(10);
+//        auto pls = ODO->get_var<double>("pls");
+//        pls.print_vals(6);
         solver_time_end = get_wall_time();
         solve_time = solver_time_end - solver_time_start;
         DebugOn("Solve time = " << solve_time << endl);
