@@ -2059,7 +2059,7 @@ namespace gravity {
         template<class T=type, typename enable_if<is_arithmetic<T>::value>::type* = nullptr>
         void round_vals_(){
             for (size_t i = 0; i < get_dim(); i++) {
-                if(_val->at(i) > 0.1){
+                if(_val->at(i) > 0.01){
                     _val->at(i) = 1;
                 }
                 else {
