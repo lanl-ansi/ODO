@@ -37,7 +37,7 @@ int main (int argc, char * argv[])
     int output = 0;
     bool relax = false, use_cplex = false, use_gurobi = false, default_args=false, run_networked = false;
     double tol = 1e-6;
-    string mehrotra = "no", log_level="0", nb_hours="6";
+    string mehrotra = "no", log_level="0", nb_hours="24";
     double solver_time_end, total_time_end, solve_time, cont_solve_start, cont_solve_end, cont_solve_time, model_build_time = -1, total_time = -1;
     double total_time_start = get_wall_time();
 
@@ -47,7 +47,7 @@ int main (int argc, char * argv[])
     opt.add_option("i", "invest", "Investment options input file name (def. Invest.xlsx)", Invest );
     opt.add_option("j", "json", "Json input file name (def. Net.json)", Json );
     opt.add_option("l", "log", "Log level (def. 0)", log_level );
-    opt.add_option("t", "time", "time in hours (def. 1)", nb_hours );
+    opt.add_option("t", "time", "number of hours per representative day (def. 24)", nb_hours );
     opt.add_option("m", "model", "power flow model: ACPOL/ACRECT/DISTFLOW/LINDISTFLOW (def. ACRECT)", mtype );
     opt.add_option("s", "solver", "Solvers: ipopt/cplex/gurobi, default = ipopt", solver_str);
     opt.add_option("n", "networked", "Run in networked mode: yes/no, default = no", networked_str);
