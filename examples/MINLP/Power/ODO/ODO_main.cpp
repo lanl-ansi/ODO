@@ -210,9 +210,9 @@ int main (int argc, char * argv[])
         solver<> ACUC(ODO,ipopt);
         return_status = ACUC.run(output=5, tol = 1e-4);
 //        ODO->print_solution();
-        ODO->print_nnz_solution(precision=5,tol=1e-4);
-//        auto pg = ODO->get_var<double>("Pg");
-//        pg.print_vals(10);
+        //ODO->print_nnz_solution(precision=5,tol=1e-4);
+        auto pg = ODO->get_var<double>("Pg");
+        pg.print_vals(10);
 //        auto pg_ = ODO->get_var<double>("Pg_");
 //        pg_.print_vals(10);
 //        auto pw = ODO->get_var<double>("Pw");
@@ -225,10 +225,10 @@ int main (int argc, char * argv[])
 //        wb.print_vals(10);
 //        auto wpv = ODO->get_var<double>("w_pv");
 //        wpv.print_vals(10);
-//        auto we = ODO->get_var<double>("w_e");
-//        we.print_vals(10);
-////        auto wg = ODO->get_var<double>("w_g");
-////        wg.print_vals(10);
+        auto we = ODO->get_var<double>("w_e");
+        we.print_vals(10);
+        auto wg = ODO->get_var<double>("w_g");
+        wg.print_vals(10);
 //        auto pls = ODO->get_var<double>("pls");
 //        pls.print_vals(6);
         solver_time_end = get_wall_time();
