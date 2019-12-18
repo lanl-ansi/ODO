@@ -222,8 +222,8 @@ public:
     /** Indices Sets */
     indices hours = indices("hours"); /**< Hours */
     //    indices months = time("jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"); /**< Months */
-    indices months = time("summer","winter", "autumn"); /**< Months */
-    indices years = time("year1"); /**< Years */
+    indices months = time("summer","spring","winter", "autumn"); /**< Months */
+    indices years = time("year1","year2","year3"); /**< Years */
     
 
 //    months._name = "months";

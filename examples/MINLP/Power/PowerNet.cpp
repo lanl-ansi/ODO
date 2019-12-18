@@ -3935,7 +3935,7 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     indices phases = indices("ph1","ph2","ph3");
     phases._name = "phases";
 //    typical_days = time("week","peak","weekend");
-    typical_days = time("week");
+//    typical_days = time("week");
     typical_days._name = "typical_days";
     T = indices(years,months,typical_days,hours);
     double nT = T.size();
@@ -4235,12 +4235,12 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     func<> obj = product(c1.in(exist_Gt), Pg_.in(exist_Gt)) + product(c1.in(pot_Gt), Pg_.in(pot_Gt)) + product(c2.in(exist_Gt), pow(Pg_.in(exist_Gt),2)) + product(c2.in(pot_Gt), Pg2.in(pot_Gt)) + sum(c0.in(exist_Gt));
     //    obj *= 12./months.size();
 //    obj += nT*product(c0.in(pot_G_ph),w_g);
-    obj += 1e-3*product(gen_capcost.in(pot_G_ph), w_g);
-    obj += 1e-3*product(inverter_capcost.in(pot_B_ph), w_b);
-    obj += 1e-3*product(expansion_capcost.in(pot_E_ph), w_e);
-    obj += 1e-3*product(pv_capcost.in(pot_PV_ph), w_pv);
-    obj += 1e-3*product(pv_varcost.in(pot_PV_ph), Pv_cap);
-    obj += 1e+2*(sum(pls) + sum(qls));
+    obj += 1e-2*product(gen_capcost.in(pot_G_ph), w_g);
+    obj += 1e-2*product(inverter_capcost.in(pot_B_ph), w_b);
+    obj += 1e-2*product(expansion_capcost.in(pot_E_ph), w_e);
+    obj += 1e-2*product(pv_capcost.in(pot_PV_ph), w_pv);
+    obj += 1e-2*product(pv_varcost.in(pot_PV_ph), Pv_cap);
+    obj += 1e+3*(sum(pls) + sum(qls));
 //    for(auto &key: *pot_PV_ph._keys){
 //        obj += pow(pow(w_pv(key),2) - w_pv(key),2);
 //    }
