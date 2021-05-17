@@ -31,8 +31,8 @@ int main (int argc, char * argv[])
 {
     
     string downl_json_cmd, downl_xls_cmd;
-    string Json_str = string(prj_dir)+"/data_sets/Power/Net.json", Xls_str = string(prj_dir)+"/data_sets/Power/TimeSeries.xlsx";
-    string Json, TimeSeries, mtype = "ACRECT";
+    string Json_str = string(prj_dir)+"/data_sets/Power/Net.json", Xls_str = string(prj_dir)+"/data_sets/Power/ExtraData.xlsx";
+    string Json, ExtraData, mtype = "ACRECT";
     string solver_str="ipopt", default_str="no", networked_str="no";
     int output = 0;
     bool relax = false, use_cplex = false, use_gurobi = false, default_args=false, run_networked = false;
@@ -44,7 +44,7 @@ int main (int argc, char * argv[])
     /** create a OptionParser with options */
     op::OptionParser opt;
     opt.add_option("h", "help", "shows option help"); // no default value means boolean options, which default value is false
-    opt.add_option("t", "TimeSeries", "TimeSeries options input file name (def. TimeSeries.xlsx)", TimeSeries);
+    opt.add_option("e", "ExtraData", "ExtraData options input file name (def. ExtraData.xlsx)", ExtraData);
     opt.add_option("j", "json", "Json input file name (def. Net.json)", Json );
     opt.add_option("l", "log", "Log level (def. 0)", log_level );
     opt.add_option("d", "default", "Use default arguments for input files: yes/no, default = no", default_str);
@@ -56,7 +56,7 @@ int main (int argc, char * argv[])
         return EXIT_FAILURE;
     }
     bool changed_input = false;
-    TimeSeries = opt["t"];
+    ExtraData = opt["e"];
     Json = opt["j"];
     default_str = opt["d"];
     if (networked_str.compare("yes")==0) {
@@ -66,8 +66,8 @@ int main (int argc, char * argv[])
         default_args = true;
         cout << "Using default arguments for Json input file: the default file found under data_sets/Power/Net.json" << endl;
     }
-    if (opt["t"].empty() && default_str.compare("yes")==0) {
-        cout << "Using default arguments for Excel input file: the default file found under data_sets/Power/TimeSeries.xlsx" << endl;
+    if (opt["e"].empty() && default_str.compare("yes")==0) {
+        cout << "Using default arguments for Excel input file: the default file found under data_sets/Power/ExtraData.xlsx" << endl;
     }
     if (solver_str.compare("gurobi")==0) {
         use_gurobi = true;
@@ -90,8 +90,8 @@ int main (int argc, char * argv[])
                 changed_input = true;
             }
         }
-        if (opt["t"].empty()){
-            cout << " Please enter the url for the Excel file (hit enter to use the default file found under data_sets/Power/TimeSeries.xlsx)\n";
+        if (opt["e"].empty()){
+            cout << " Please enter the url for the Excel file (hit enter to use the default file found under data_sets/Power/ExtraData.xlsx)\n";
             getline(cin, Xls_str);
             if (!Xls_str.empty()) {
                 changed_input = true;
@@ -100,25 +100,25 @@ int main (int argc, char * argv[])
     }
 #if defined(_WIN32)
     downl_json_cmd = string("wget -O Net.json" + Json_str);
-    downl_xls_cmd = string("wget -O TimeSeries.xlsx \"" + Xls_str + "\"");
+    downl_xls_cmd = string("wget -O ExtraData.xlsx \"" + Xls_str + "\"");
 #elif defined(__APPLE__)
     downl_json_cmd = string("curl \"" + Json_str + "\" > Net.json");
-    downl_xls_cmd = string("curl \"" + Xls_str + "\" > TimeSeries.xlsx");
+    downl_xls_cmd = string("curl \"" + Xls_str + "\" > ExtraData.xlsx");
 #elif defined(__linux__)
     downl_json_cmd = string("wget -O Net.json \"" + Json_str + "\"");
-    downl_xls_cmd = string("wget -O TimeSeries.xlsx \"" + Xls_str + "\"");
+    downl_xls_cmd = string("wget -O ExtraData.xlsx \"" + Xls_str + "\"");
 #endif
     if (opt["j"].empty() && changed_input) {
         system(downl_json_cmd.c_str());
     }
-    if (opt["t"].empty() && changed_input) {
+    if (opt["e"].empty() && changed_input) {
         system(downl_xls_cmd.c_str());
     }
     if(Json.empty()){
         Json = "Net.json";
     }
-    if(TimeSeries.empty()){
-        TimeSeries = "TimeSeries.xlsx";
+    if(ExtraData.empty()){
+        ExtraData = "ExtraData.xlsx";
     }
     PowerNet grid;
     PowerModelType pmt = ACRECT;
@@ -135,7 +135,7 @@ int main (int argc, char * argv[])
     }
     
     grid.readJSON(Json);
-    auto stat = grid.readODO(TimeSeries);
+    auto stat = grid.readODO(ExtraData);
     if (stat==-1) {
         cerr << "Error reading Excel File, Exiting" << endl;
         return -1;
