@@ -32,7 +32,7 @@ int main (int argc, char * argv[])
     
     string downl_json_cmd, downl_xls_cmd;
     string Json_str = string(prj_dir)+"/data_sets/Power/Net.json", Xls_str = string(prj_dir)+"/data_sets/Power/ExtraData.xlsx";
-    string Json, ExtraData, mtype = "ACRECT";
+    string Json = string(prj_dir)+"/data_sets/Power/Net.json", ExtraData = string(prj_dir)+"/data_sets/Power/ExtraData.xlsx", mtype = "ACRECT";
     string solver_str="ipopt", default_str="no", networked_str="no";
     int output = 0;
     bool relax = false, use_cplex = false, use_gurobi = false, default_args=false, run_networked = false;
@@ -157,7 +157,7 @@ int main (int argc, char * argv[])
 
     grid._networked = run_networked;
     auto ODO = grid.build_ODO_model(pmt,output,tol,1);
-//    ODO->print();
+    ODO->print();
     
 //    return 0;
     
@@ -188,11 +188,13 @@ int main (int argc, char * argv[])
     else {
         int precision;
         solver<> ACUC(ODO,ipopt);
-        return_status = ACUC.run(output=5, tol = 1e-4);
+        return_status = ACUC.run(output=5, tol = 1e-6);
 //        ODO->print_solution();
         //ODO->print_nnz_solution(precision=5,tol=1e-4);
-        auto pg = ODO->get_var<double>("Pg");
-        pg.print_vals(10);
+//        auto pg = ODO->get_var<double>("Pg");
+//        pg.print_vals(10);
+//        ODO->write_var_solution("Pg");
+        ODO->write_solution();
 //        auto pg_ = ODO->get_var<double>("Pg_");
 //        pg_.print_vals(10);
 //        auto pw = ODO->get_var<double>("Pw");
@@ -205,10 +207,10 @@ int main (int argc, char * argv[])
 //        wb.print_vals(10);
 //        auto wpv = ODO->get_var<double>("w_pv");
 //        wpv.print_vals(10);
-        auto we = ODO->get_var<double>("w_e");
-        we.print_vals(10);
-        auto wg = ODO->get_var<double>("w_g");
-        wg.print_vals(10);
+//        auto we = ODO->get_var<double>("w_e");
+//        we.print_vals(10);
+//        auto wg = ODO->get_var<double>("w_g");
+//        wg.print_vals(10);
 //        auto pls = ODO->get_var<double>("pls");
 //        pls.print_vals(6);
         solver_time_end = get_wall_time();

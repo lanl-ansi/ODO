@@ -109,9 +109,9 @@ public:
     size_t _max_it = 10000;
     size_t _max_time = 3600;
     double  _tol = 1e-6;
-    unsigned _nb_years = 5;
-    unsigned _nb_hours = 24;
-    unsigned _nb_fuel_hours = 12; /**< Number of hours of fuel availiability is case of a natural disaster */
+    unsigned _nb_years = 1;
+    unsigned _nb_hours = 1;
+    unsigned _nb_fuel_hours = 1; /**< Number of hours of fuel availiability is case of a natural disaster */
     bool     _networked = false; /**< Allow networking of different microgrids */
     double _inflation_rate = 0.02, _demand_growth = 0.02;
     double _pv_cap_cost = 2500, _wind_cap_cost = 2500, _pv_eff = 0.8, _wind_eff = 0.8;
@@ -222,8 +222,8 @@ public:
     /** Indices Sets */
     indices hours = indices("hours"); /**< Hours */
     //    indices months = time("jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"); /**< Months */
-    indices months = time("summer","spring","winter", "autumn"); /**< Months */
-    indices years = time("year1","year2","year3"); /**< Years */
+    indices months = time("summer"); /**< Months */
+    indices years = time("year1"); /**< Years */
     
 
 //    months._name = "months";

@@ -1805,226 +1805,10 @@ int PowerNet::readODO(const string& fname){
         auto row = *row_it++;
         _max_time = row[1].value<int>();
         row = *row_it++;
-        _max_it = row[1].value<int>();
-        row = *row_it++;
         _tol = row[1].value<double>();
         row = *row_it++;
-        _nb_years = row[1].value<int>();
-        row = *row_it++;
-        _inflation_rate = row[1].value<double>();
-        row = *row_it++;
-        _demand_growth = row[1].value<double>();
-        row = *row_it++;
-        _networked = (row[1].to_string()=="Yes");
-        row = *row_it++;
-        _nb_fuel_hours = row[1].value<int>();
     }
-    
-    ws = wb.sheet_by_title("CableParams");
-    clog << "Processing CableParams for branch expansion costs and line properties" << std::endl;
-    auto row_it = ws.rows().begin();
-    row_it++;//SKIP FRIST ROW
-    vector<string> r; /* Matrix of resistance */
-    vector<string> x; /* Matrix of reactance */
-    vector<double> cost; /* Vector of expansion costs */
-    vector<double> Smax; /* Vector of thermal limits */
-    vector<string> phase_list;
-    while (row_it!=ws.rows().end()) {
-        auto row = *row_it++;
-        cost.push_back(row[2].value<double>());
-        r.push_back(row[3].to_string());
-        x.push_back(row[4].to_string());
-        Smax.push_back(row[5].value<double>()/bMVA);
-        phase_list.push_back(row[6].to_string());
-    }
-    
-    bool found_branch_expansion = true;
-    try{
-        ws = wb.sheet_by_title("BranchInvest");
-    }
-    catch(xlnt::key_not_found err) {
-        found_branch_expansion = false;
-        cerr << "Cannot find sheet BranchInvest, ignoring branch expansion options" << endl;
-    }
-    if (found_branch_expansion) {
-        index = this->arcs.size();
-        clog << "Processing BranchInvest" << std::endl;
-        auto row_it = ws.rows().begin();
-        row_it++;//SKIP FRIST ROW
-        for (size_t i = 0; i<nb_nodes-1; i++) {
-            auto row = *row_it++;
-            for (size_t j = i+1; j<nb_nodes; j++) {
-                if (row[j].has_value()) {
-                    string list = row[j].to_string();
-                    size_t sz = 0;
-                    int b_id = 0;
-                    b_id = stoi(list, &sz);
-                    if (list.size()==1 && b_id==0) {
-                        continue;
-                    }
-                    while (true) {
-                        auto src = to_string(i+1);
-                        auto dest = to_string(j);
-                        DebugOn("Expansion possible on arc (" << i+1 << "," << j << ") with type " << b_id << endl);
-                        auto arc = new Line("Potential_Type"+to_string(b_id) + "," + src + "," + dest); // Name of lines
-                        arc->_expansion = true;
-                        arc->_active = true;
-                        arc->b_type = b_id;
-                        arc->smax = Smax[b_id-1];
-                        arc->cost = cost[b_id-1];
-                        arc->set_phases(phase_list[b_id-1]);
-                        arc->_id = index++;
-                        arc->_src = get_node(src);
-                        arc->_dest= get_node(dest);
-                        arc->connect();
-                        arc->_tie_line = arc->_src->_net_id!=arc->_dest->_net_id;
-                        add_arc(arc);
-                        expansion_capcost.add_val(arc->_name, arc->cost);
-                        _potential_expansion.push_back(arc);
-                        auto r_str = r[b_id-1];
-                        auto x_str = x[b_id-1];
-                        auto ymat = arma::cx_mat(3,3);
-                        for (auto i = 0; i<3; i++) {
-                            if(arc->_phases.count(i+1)!=0 && arc->_src->_phases.count(i+1)!=0 && arc->_dest->_phases.count(i+1)!=0){
-                                auto ph_key = "ph"+to_string(i+1)+","+arc->_name;
-                                E_ph.insert(ph_key);
-                                pot_E_ph.insert(ph_key);
-                                this->S_max.add_val(ph_key, arc->smax);
-                                if(i==0){
-                                    E_ph1.insert(ph_key);
-                                }
-                                else if(i==1){
-                                    E_ph2.insert(ph_key);
-                                }
-                                else {
-                                    E_ph3.insert(ph_key);
-                                }
-                                for (auto j= 0; j<3; j++) {
-                                    if(arc->_phases.count(i+1)!=0 && arc->_src->_phases.count(i+1)!=0 && arc->_dest->_phases.count(i+1)!=0){
-                                        auto key = "ph"+to_string(i+1)+",ph"+to_string(j+1)+","+arc->_name;
-                                        r_str = r_str.substr(0,r_str.find_first_of(","));
-                                        x_str = x_str.substr(0,x_str.find_first_of(","));
-                                        br_r_.add_val(key, stod(r_str));
-                                        br_x_.add_val(key, stod(x_str));
-                                        ymat(i,j) = complex<double>(br_r_.eval(),br_x_.eval());
-//                                            b.add_val(key, ymat_inv(i,j).imag());
-                                    }
-                                }
-                                b_fr_.add_val(ph_key, 0);
-                                b_to_.add_val(ph_key, 0);
-                                g_fr_.add_val(ph_key, 0);
-                                g_to_.add_val(ph_key, 0);
-                                shift_.add_val(ph_key, 0);
-                                tap_.add_val(ph_key, 1);
-                            }
-                        }
-                        arma::cx_mat ymat_inv = arma::pinv(ymat);
-                        for (auto i= 0; i<3; i++) {
-                            if(arc->_phases.count(i+1)==0)
-                                continue;
-                            for (auto j= 0; j<3; j++) {
-                                if(arc->_phases.count(j+1)==0)
-                                    continue;
-                                auto key = "ph"+to_string(i+1)+",ph"+to_string(j+1)+","+arc->_name;
-                                cross_phase.insert(key);
-                                g.add_val(key, ymat_inv(i,j).real());
-                                b.add_val(key, ymat_inv(i,j).imag());
-                            }
-                        }
-                        if (list.size()<= sz) {
-                            break;
-                        }
-                        list = list.substr(sz+1);
-                        b_id = stoi(list, &sz);
-                    }
-                }
-            }
-        }
-    }
-    
-    bool found_SwitchParams = true;
-    try{
-        ws = wb.sheet_by_title("SwitchParams");
-    }
-    catch(xlnt::key_not_found err) {
-        found_SwitchParams = false;
-        cerr << "Cannot find sheet SwitchParams, using default switch gear parameters (Capital cost: capital cost $80,000, remote controlled)   " << endl;
-    }
-    if(found_SwitchParams){
-        size_t idx = 0;
-        clog << "Processing SwitchParams (Switch gear capital cost and operation type)" << std::endl;
-        row_it = ws.rows().begin();
-        while (row_it!=ws.rows().end()) {
-            auto row = *row_it++;
-            _all_switches.push_back(Switch("Switch"+to_string(idx++),row[2].value<double>(), row[3].value<bool>(), row[4].value<bool>()));
-            _all_switches.back().print();
-        }
-    }
-    
-    bool found_switch_invest = true;
-    try{
-        ws = wb.sheet_by_title("SwitchInvest");
-    }
-    catch(xlnt::key_not_found err) {
-        found_switch_invest = false;
-        cerr << "Cannot find sheet SwitchInvest, ignoring switch gear investment options" << endl;
-    }
-    if (found_switch_invest) {
-        index = this->arcs.size();
-        clog << "Processing SwitchInvest" << std::endl;
-        auto row_it = ws.rows().begin();
-        row_it++;//SKIP FRIST ROW
-        for (size_t i = 0; i<nb_nodes-1; i++) {
-            auto row = *row_it++;
-            for (size_t j = i+1; j<nb_nodes; j++) {
-                if (row[j].has_value()) {
-                    string list = row[j].to_string();
-                    size_t sz = 0;
-                    int s_id = 0;
-                    s_id = stoi(list, &sz);
-                    if (list.size()==1 && s_id==0) {
-                        continue;
-                    }
-                    while (true) {
-                        auto src = to_string(i+1);
-                        auto dest = to_string(j);
-                        DebugOn("Switch possible on branch (" << i+1 << "," << j << ") with type " << s_id << endl);
-                        auto a = (Line*)get_arc(src,dest);
-                        a->_switches.push_back(_all_switches[s_id]);
-                        _potential_switches.push_back(&_all_switches[s_id]);
-                        if (list.size()<= sz) {
-                            break;
-                        }
-                        list = list.substr(sz+1);
-                        s_id = stoi(list, &sz);
-                    }
-                }
-            }
-        }
-    }
-    
-    ws = wb.sheet_by_title("CableLen");
-    clog << "Processing CableLen" << std::endl;
-    row_it = ws.rows().begin();
-    row_it++;//SKIP FRIST ROW
-    index = 0;
-    double len = 0;
-    for (size_t i = 0; i<nb_nodes-1; i++) {
-        auto row = *row_it++;
-        for (size_t j = i+1; j<nb_nodes; j++) {
-            if (row[j].has_value() && row[j].value<unsigned>()>0) {
-                auto src = to_string(i+1);
-                auto dest = to_string(j);
-                len = row[j].value<unsigned>();
-                auto a = get_arc(src, dest);
-                if(a){
-                    DebugOn("(" << i+1 << "," << j << ") has len " << len << endl);
-                    a->_len = len;
-                }
-            }
-        }
-    }
-    
+
     
     unsigned exist = 0, min_bat = 0, max_bat = 0, min_d = 0, max_d = 0, age = 0;
     double min_PV = 0, max_PV = 0;
@@ -2040,7 +1824,7 @@ int PowerNet::readODO(const string& fname){
     }
     if(found_PvWindInvest){
         clog << "Processing PvWindInvest (Pv and Wind investment options at each node)" << std::endl;
-        row_it = ws.rows().begin();
+        auto row_it = ws.rows().begin();
         row_it++;
         row_it++;//SKIP SECOND ROW
         vector<string> pv_phase_list;
@@ -2140,39 +1924,12 @@ int PowerNet::readODO(const string& fname){
         }
     }
     
-    bool found_PvWindParams = true;
-    try{
-        ws = wb.sheet_by_title("PvWindParams");
-    }
-    catch(xlnt::key_not_found err) {
-        found_PvWindParams = false;
-        cerr << "Cannot find sheet PvWindParams, using default PV nd Wind parameters (Capital cost: 2500 $/kW, 80% efficiency)" << endl;
-    }
-    if(found_PvWindParams){
-        clog << "Processing PvWindParams (Pv and Wind capital cost and efficiency)" << std::endl;
-        row_it = ws.rows().begin();
-        auto row = *row_it;
-        _pv_cap_cost = row[1].value<double>();
-        row_it++;
-        row = *row_it;
-        _pv_eff = row[1].value<double>();
-        DebugOn("PV cap cost = " << _pv_cap_cost << endl);
-        DebugOn("PV eff = " << _pv_eff << endl);
-        row_it++;
-        row = *row_it;
-        _wind_cap_cost = row[1].value<double>();
-        row_it++;
-        row = *row_it;
-        _wind_eff = row[1].value<double>();
-        DebugOn("Wind cap cost = " << _wind_cap_cost << endl);
-        DebugOn("Wind eff = " << _wind_eff << endl);
-    }
     
     
     
     ws = wb.sheet_by_title("DieselParams");
     clog << "Processing DieselParams" << std::endl;
-    row_it = ws.rows().begin();
+    auto row_it = ws.rows().begin();
     row_it++;//SKIP FRIST ROW
     
     unsigned lifetime,type,idx = 1;
@@ -2635,8 +2392,8 @@ int PowerNet::readODO(const string& fname){
         found_LoadData = false;
         cerr << "Cannot find sheet LoadTimeSeries, setting all loads to 0." << endl;
     }
-    if(found_LoadData){
-//    if(false){
+//    if(found_LoadData){
+    if(false){
         clog << "Processing LoadTimeSeries" << std::endl;
         size_t row_id = 1;
         row_it = ws.rows().begin();
@@ -2718,68 +2475,10 @@ int PowerNet::readODO(const string& fname){
             }
 
         }
-        compute_loads();
+//        compute_loads();
     }
     
-    bool found_ResiliencyData = true;
-    try{
-        ws = wb.sheet_by_title("ResiliencyScenarios");
-    }
-    catch(xlnt::key_not_found err) {
-        found_ResiliencyData = false;
-        cerr << "Cannot find sheet ResiliencyScenarios, no resiliency scenarios considered." << endl;
-    }
-    if(found_ResiliencyData){
-        clog << "Processing ResiliencyScenarios" << std::endl;
-        size_t row_id = 0;
-        row_it = ws.rows().begin();
-        row_it++;//SKIP FRIST ROW
-        auto rows_end = ws.rows().end();
-        while (row_it!=rows_end) {
-            auto row = *row_it++;
-            auto name = row[0].to_string();
-            auto tstamp = row[1].value<xlnt::datetime>();
-            auto day = tstamp.day;
-            DebugOff("day = " << to_string(day) << endl);
-            auto month = tstamp.month;
-            DebugOff("month = " << to_string(month) << endl);
-            auto year = tstamp.year;
-            DebugOff("year = " << to_string(year) << endl);
-            auto hour = std::min(23,(int)round(tstamp.hour + tstamp.minute*1./60.));
-            DebugOff("hour = " << to_string(hour) << endl);
-            assert(hour<24 && hour >=0);
-            row_id++;
-            auto nb_hours = row[2].value<int>();
-            DebugOff("nb hours in resiliency scenario = " << to_string(nb_hours) << endl);
-            auto scen = make_shared<Scenario>(name,year,month,day,hour,nb_hours);
-            _res_scenarios[name] = scen;
-            auto col_start = row.begin();
-            auto col_end = row.end();
-            auto col_it = col_start;
-            col_it++;col_it++;col_it++;
-            while (col_it!=col_end) {
-                auto col = *col_it++;
-                auto conting_name = col.to_string();
-                auto conting_type = conting_name.substr(0,conting_name.find_first_of("_"));
-                if(conting_type=="branch"){
-                    auto br = conting_name.substr(conting_name.find_first_of("_")+1);
-                    auto src = br.substr(0,br.find_first_of("_"));
-                    auto dest = br.substr(br.find_first_of("_")+1);
-                    auto arc = get_arc(src, dest);
-                    scen->_out_arcs[arc->_name]=arc;
-                }
-                else if(conting_type=="gen"){
-                    int gen_id = stoi(conting_name.substr(conting_name.find_first_of("_")+1));
-                    auto gen = gens.at(gen_id);
-                    scen->_out_gens[gen->_name] = gen;
-                }
-                else {
-                    throw invalid_argument("unsupported contingency type, use branch_srcId_desId or gen_busId");
-                }
-            }
-        }
-    }
-
+   
     
     
     
@@ -2871,7 +2570,6 @@ int PowerNet::readODO(const string& fname){
     //    pl.print(true);
     
     clog << "Reading excel file complete" << std::endl;
-    cout << "Number of hours of fuel availibility = " << _nb_fuel_hours << endl;
     return 0;
 }
 
@@ -2943,7 +2641,7 @@ void PowerNet::readJSON(const string& fname){
         auto btype = list["bus_type"].GetInt();
         Debug("btype = " << btype << endl);
         auto index = list["index"].GetInt();
-        auto net_id = list["microgrid_id"].GetInt();
+//        auto net_id = list["microgrid_id"].GetInt();
         auto name = string(list["name"].GetString());
         auto status =  list["status"].GetInt();
         auto va =  list["va"].GetArray();
@@ -2953,8 +2651,8 @@ void PowerNet::readJSON(const string& fname){
         auto bus = new Bus(to_string(index));
         bus->vbound.min = vmin[0].GetDouble();
         bus->vbound.max = vmax[0].GetDouble();
-        bus->_net_id = net_id;
-        _microgrid_ids.insert(net_id);
+//        bus->_net_id = net_id;
+//        _microgrid_ids.insert(net_id);
 //        vm_s_.add_val("ph1,"+bus->_name, 0.9999742573517363);
 //        vm_s_.add_val("ph2,"+bus->_name, 1.0000038391442767);
 //        vm_s_.add_val("ph3,"+bus->_name, 0.9999622416976457);
@@ -3213,13 +2911,13 @@ void PowerNet::readJSON(const string& fname){
         auto pd =  list["pd"].GetArray();
         auto qd =  list["qd"].GetArray();
         auto load_name = list["name"].GetString();
-        auto critical = list["critical"].GetInt();
+//        auto critical = list["critical"].GetInt();
         auto bus = (Bus*)get_node(to_string(lbus));
-        bus->_critical_level = std::max(bus->_critical_level, critical);
+//        bus->_critical_level = std::max(bus->_critical_level, critical);
         for(auto ph=1; ph<=3; ph++){
             auto key = "ph"+to_string(ph) +","+string(load_name);
             _load_map[key] = bus;
-            bus->_loads[key] = make_shared<Load>(load_name, critical);
+            bus->_loads[key] = make_shared<Load>(load_name, false);
         }
         auto name = bus->_name;
         for(auto i=0; i<3; i++){
@@ -3983,21 +3681,21 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
 
     var<> Pv_cap("Pv_cap", 0, pv_max); /**< Real variable indicating the extra capacity of PV to be installed on bus b */
     ODO->add(Pv_cap.in(pot_PV_ph));
-    var<int> w_g("w_g",0,1); /**< Binary variable indicating if generator g is built on bus */
-    var<int> w_b("w_b",0,1); /**< Binary variable indicating if battery b is built on bus */
-    var<int> w_e("w_e",0,1); /**< Binary variable indicating if expansion is selected for edge e */
-    var<int> w_pv("w_pv",0,1); /**< Binary variable indicating if PV is installed on bus b */
-    var<int> w_wind("w_wind",0,1); /**< Binary variable indicating if Wind is installed on bus b */
-    ODO->add(w_g.in(pot_G_ph),w_b.in(pot_B_ph),w_e.in(pot_E_ph),w_pv.in(pot_PV_ph),w_wind.in(pot_Wind_ph));
+//    var<int> w_g("w_g",0,1); /**< Binary variable indicating if generator g is built on bus */
+//    var<int> w_b("w_b",0,1); /**< Binary variable indicating if battery b is built on bus */
+//    var<int> w_e("w_e",0,1); /**< Binary variable indicating if expansion is selected for edge e */
+//    var<int> w_pv("w_pv",0,1); /**< Binary variable indicating if PV is installed on bus b */
+//    var<int> w_wind("w_wind",0,1); /**< Binary variable indicating if Wind is installed on bus b */
+//    ODO->add(w_g.in(pot_G_ph),w_b.in(pot_B_ph),w_e.in(pot_E_ph),w_pv.in(pot_PV_ph),w_wind.in(pot_Wind_ph));
 //    w_g.initialize_uniform();
 //    w_b.initialize_uniform();
 //    w_e.initialize_uniform();
 //    w_pv.initialize_uniform();
 //    w_wind.initialize_uniform();
-    w_b.initialize_all(1);
-    w_e.initialize_all(1);
-    w_pv.initialize_all(1);
-    w_wind.initialize_all(1);
+//    w_b.initialize_all(1);
+//    w_e.initialize_all(1);
+//    w_pv.initialize_all(1);
+//    w_wind.initialize_all(1);
 
 //    this->w_g = w_g;
 //    this->w_b = w_b;
@@ -4006,23 +3704,23 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
 //    this->w_wind = w_wind;
     this->Pv_cap = Pv_cap;
 
-    DebugOff("size w_g = " << w_g.get_dim() << endl);
-    DebugOff("size w_b = " << w_b.get_dim() << endl);
-    DebugOff("size w_e = " << w_e.get_dim() << endl);
-    DebugOff("size w_pv = " << w_pv.get_dim() << endl);
-    DebugOff("size w_wind = " << w_wind.get_dim() << endl);
-    DebugOff("size Pv_cap = " << Pv_cap.get_dim() << endl);
+//    DebugOff("size w_g = " << w_g.get_dim() << endl);
+//    DebugOff("size w_b = " << w_b.get_dim() << endl);
+//    DebugOff("size w_e = " << w_e.get_dim() << endl);
+//    DebugOff("size w_pv = " << w_pv.get_dim() << endl);
+//    DebugOff("size w_wind = " << w_wind.get_dim() << endl);
+//    DebugOff("size Pv_cap = " << Pv_cap.get_dim() << endl);
 
 
     /* Diesel power generation variables */
     var<> Pg("Pg", pg_min.in(Gt), pg_max.in(Gt));
     var<> Qg ("Qg", qg_min.in(Gt), qg_max.in(Gt));
     var<> Pg_ ("Pg_", pg_min.in(Gt), pg_max.in(Gt));/**< Active power generation before losses */
-    var<> Pg2("Pg2", 0, pow(pg_max.in(pot_Gt),2));/**< Square of Pg */
+//    var<> Pg2("Pg2", 0, pow(pg_max.in(pot_Gt),2));/**< Square of Pg */
     ODO->add(Pg.in(Gt));
     ODO->add(Pg_.in(Gt));
     ODO->add(Qg.in(Gt));
-    ODO->add(Pg2.in(pot_Gt));
+//    ODO->add(Pg2.in(pot_Gt));
     DebugOff("size Pg = " << Pg.get_dim() << endl);
     DebugOff("size Pg_ = " << Pg_.get_dim() << endl);
     DebugOff("size Qg = " << Qg.get_dim() << endl);
@@ -4116,7 +3814,7 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     auto to_ph1 = to_branch_phase(1);
     auto to_ph2 = to_branch_phase(2);
     auto to_ph3 = to_branch_phase(3);
-    bool ACPower = false;
+    bool ACPower = true;
     if(ACPower){
         /** Power Flows */
         param<Cpx> Y0("Y0"), Y1("Y1"), Y2("Y2"), Y3("Y3");
@@ -4232,14 +3930,14 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
 //
     /** OBJECTIVE FUNCTION */
     //check pot_gen
-    func<> obj = product(c1.in(exist_Gt), Pg_.in(exist_Gt)) + product(c1.in(pot_Gt), Pg_.in(pot_Gt)) + product(c2.in(exist_Gt), pow(Pg_.in(exist_Gt),2)) + product(c2.in(pot_Gt), Pg2.in(pot_Gt)) + sum(c0.in(exist_Gt));
+    func<> obj = product(c1.in(exist_Gt), Pg_.in(exist_Gt)) + product(c1.in(pot_Gt), Pg_.in(pot_Gt)) + product(c2.in(exist_Gt), pow(Pg_.in(exist_Gt),2)) +  sum(c0.in(exist_Gt));
     //    obj *= 12./months.size();
 //    obj += nT*product(c0.in(pot_G_ph),w_g);
-    obj += 1e-2*product(gen_capcost.in(pot_G_ph), w_g);
-    obj += 1e-2*product(inverter_capcost.in(pot_B_ph), w_b);
-    obj += 1e-2*product(expansion_capcost.in(pot_E_ph), w_e);
-    obj += 1e-2*product(pv_capcost.in(pot_PV_ph), w_pv);
-    obj += 1e-2*product(pv_varcost.in(pot_PV_ph), Pv_cap);
+//    obj += 1e-2*product(gen_capcost.in(pot_G_ph), w_g);
+//    obj += 1e-2*product(inverter_capcost.in(pot_B_ph), w_b);
+//    obj += 1e-2*product(expansion_capcost.in(pot_E_ph), w_e);
+//    obj += 1e-2*product(pv_capcost.in(pot_PV_ph), w_pv);
+//    obj += 1e-2*product(pv_varcost.in(pot_PV_ph), Pv_cap);
     obj += 1e+3*(sum(pls) + sum(qls));
 //    for(auto &key: *pot_PV_ph._keys){
 //        obj += pow(pow(w_pv(key),2) - w_pv(key),2);
@@ -4278,21 +3976,7 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
 //    }
 //    ODO->add(fix_voltage_ang.in(ref_id)==0);
 
-    if(_networked){
-        cout << endl << "Running in networked mode" << endl;
-    }
-    else {
-        cout << endl << "Running in isolated mode" << endl;
-    }
-
     
-    /** Networking Constraints **/
-    indices Tielines = get_tielines();
-    if(!_networked){
-        Constraint<> Tielines_Off("Tielines_Off");
-        Tielines_Off += w_e.in(Tielines);
-        ODO->add(Tielines_Off.in(Tielines) == 0);
-    }
     /** FLOW CONSERVATION **/
     
     /** KCL Flow conservation */
@@ -4319,17 +4003,6 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     ODO->add(Thermal_Limit_to.in(exist_Et) <= 0);
 
 
-    /*  Thermal Limit Constraints for expansion edges */
-    Constraint<> Thermal_Limit_from_exp("Thermal_Limit_From_Exp");
-    Thermal_Limit_from_exp += pow(Pij.in(pot_Et), 2) + pow(Qij.in(pot_Et), 2);
-    Thermal_Limit_from_exp -= pow(w_e.in(pot_Et),2)*pow(S_max.in(pot_Et), 2);
-    ODO->add(Thermal_Limit_from_exp.in(pot_Et) <= 0);
-    
-    Constraint<> Thermal_Limit_to_exp("Thermal_Limit_to_Exp");
-    Thermal_Limit_to_exp += pow(Pji.in(pot_Et), 2) + pow(Qji.in(pot_Et), 2);
-    Thermal_Limit_to_exp -= pow(w_e.in(pot_Et),2)*pow(S_max.in(pot_Et), 2);
-    ODO->add(Thermal_Limit_to_exp.in(pot_Et) <= 0);
-
     /** AC voltage limit constraints. */
     if (pmt==ACRECT) {
         Constraint<> Vol_limit_UB("Vol_limit_UB");
@@ -4345,36 +4018,10 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     
     /**  GENERATOR INVESTMENT **/
 
-    /*  On/Off status */
-    Constraint<> OnOff_maxP("OnOff_maxP");
-    OnOff_maxP += Pg_.in(pot_Gt) - pg_max.in(pot_Gt)*w_g.in(pot_Gt);
-    ODO->add(OnOff_maxP.in(pot_Gt) <= 0);
-
-    Constraint<> Perspective_OnOff("Perspective_OnOff");
-    Perspective_OnOff += pow(Pg_.in(pot_Gt),2) - Pg2.in(pot_Gt)*w_g.in(pot_Gt);
-    ODO->add(Perspective_OnOff.in(pot_Gt) <= 0);
-
-    Constraint<> OnOff_maxQ("OnOff_maxQ");
-    OnOff_maxQ += Qg.in(pot_Gt) - qg_max.in(pot_Gt)*w_g.in(pot_Gt);
-    ODO->add(OnOff_maxQ.in(pot_Gt) <= 0);
-
-    Constraint<> OnOff_maxQ_N("OnOff_maxQ_N");
-    OnOff_maxQ_N += Qg.in(pot_Gt) - qg_min.in(pot_Gt)*w_g.in(pot_Gt);
-    ODO->add(OnOff_maxQ_N.in(pot_Gt) >= 0);
-
+ 
      /**  PV **/
 
-    /*  On/Off on Potential PV */
-    Constraint<> OnOffPV("OnOffPV");
-    OnOffPV += Pv_cap.in(pot_PV_ph) - w_pv*pv_max.in(pot_PV_ph);
-    ODO->add(OnOffPV.in(pot_PV_ph) <= 0);
-    Pv_cap.print();
-
-    /*  Max Cap on Potential PV */
-    Constraint<> MaxCapPV("MaxCapPV");
-    MaxCapPV += Pv.in(pot_PVt) - Pv_cap.in(pot_PVt)*pv_out.in(pot_PVt);
-    ODO->add(MaxCapPV.in(pot_PVt) <= 0);
-
+  
     /*  Existing PV */
     Constraint<> existPV("existPV");
     existPV += Pv.in(exist_PVt) - pv_max.in(exist_PVt)*pv_out.in(exist_PVt);
@@ -4383,11 +4030,7 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
 
     /**  BATTERIES **/
 
-    /*  Apparent Power Limit on Potential Batteries */
-    Constraint<> Apparent_Limit_Batt_Pot("Apparent_Limit_Batt_Potential");
-    Apparent_Limit_Batt_Pot += pow(Pb.in(pot_Bt), 2) + pow(Qb.in(pot_Bt), 2);
-    Apparent_Limit_Batt_Pot -= pow(w_b.in(pot_Bt),2)*pow(pb_max.in(pot_Bt), 2);
-    ODO->add(Apparent_Limit_Batt_Pot.in(pot_Bt) <= 0);
+   
 
     /*  Apparent Power Limit on Existing Batteries */
     Constraint<> Apparent_Limit_Batt("Apparent_Limit_Batt_Existing");
@@ -4427,450 +4070,11 @@ shared_ptr<Model<>> PowerNet::build_ODO_model(PowerModelType pmt, int output, do
     EfficiencyExist += Pb.in(exist_batt_eff)  - eff_a.in(exist_batt_eff)*Pb_.in(exist_batt_eff) - eff_b.in(exist_batt_eff);
     ODO->add(EfficiencyExist.in(exist_batt_eff) <= 0);
 
-    Constraint<> EfficiencyPot("BatteryEfficiencyPotential");
-    EfficiencyPot += Pb.in(pot_batt_eff)  - eff_a.in(pot_batt_eff)*Pb_.in(pot_batt_eff) - eff_b.in(pot_batt_eff)*w_b.in(pot_batt_eff);
-    ODO->add(EfficiencyPot.in(pot_batt_eff) <= 0);
-//
-//
-//    for (auto n:nodes) {
-//        auto b = (Bus*)n;
-//        //        b->print();
-//        for (auto i = 0; i < b->_pot_gen.size(); i++) {
-//            auto gen = b->_pot_gen[i];
-//            if(min_diesel_invest.eval(gen->_name)==max_diesel_invest.eval(gen->_name)){
-//                Constraint FixedDieselInvest("FixedDieselInvest"+gen->_name);
-//                FixedDieselInvest += w_g(gen->_name);
-//                ODO->add(FixedDieselInvest == 1);
-//                for (auto j = i+1; j < b->_pot_gen.size(); j++) {
-//                    auto gen2 = b->_pot_gen[j];
-//                    if (gen2->_gen_type==gen->_gen_type) {
-//                        Constraint FixedDieselInvest("FixedDieselInvest"+gen2->_name);
-//                        FixedDieselInvest += w_g(gen2->_name);
-//                        ODO->add(FixedDieselInvest == 1);
-//                    }
-//                }
-//            }
-//            else {
-//                Constraint MinDieselInvest("MinDieselInvest_"+b->_name+"_DG"+to_string(gen->_gen_type));
-//                MinDieselInvest += w_g(gen->_name);
-//                for (auto j = i+1; j < b->_pot_gen.size(); j++) {
-//                    auto gen2 = b->_pot_gen[j];
-//                    if (gen2->_gen_type==gen->_gen_type) {
-//                        MinDieselInvest += w_g(gen2->_name);
-//                    }
-//                }
-//                auto rhs = min_diesel_invest.eval(gen->_name);
-//                if (rhs>0) {
-//                    ODO->add(MinDieselInvest >= rhs);
-//                }
-//            }
-//        }
-//        for (auto i = 0; i < b->_pot_bat.size(); i++) {
-//            auto bat = b->_pot_bat[i];
-//            if(min_batt_invest.eval(bat->_name)==max_batt_invest.eval(bat->_name)){
-//                Constraint FixedBattInvest("FixedBattInvest"+bat->_name);
-//                FixedBattInvest += w_b(bat->_name);
-//                ODO->add(FixedBattInvest == 1);
-//                for (auto j = i+1; j < b->_pot_bat.size(); j++) {
-//                    auto bat2 = b->_pot_bat[j];
-//                    if (bat2->_bat_type==bat->_bat_type) {
-//                        Constraint FixedBattInvest("FixedBattInvest"+bat2->_name);
-//                        FixedBattInvest += w_b(bat2->_name);
-//                        ODO->add(FixedBattInvest == 1);
-//                    }
-//                }
-//            }
-//            else {
-//                Constraint MinBattInvest("MinBattInvest_"+b->_name+"_DG"+to_string(bat->_bat_type));
-//                MinBattInvest += w_b(bat->_name);
-//                for (auto j = i+1; j < b->_pot_bat.size(); j++) {
-//                    auto bat2 = b->_pot_bat[j];
-//                    if (bat2->_bat_type==bat->_bat_type) {
-//                        MinBattInvest += w_b(bat2->_name);
-//                    }
-//                }
-//                auto rhs = min_batt_invest.eval(bat->_name);
-//                if (rhs>0) {
-//                    ODO->add(MinBattInvest >= rhs);
-//                }
-//            }
-//        }
-//    }
-//    ODO->print();
-    bool build_contingency = true;
-    if(build_contingency){
-        DebugOn("Building resiliency constraints" << endl);
-        auto scenarios = get_all_conting(_res_scenarios);
-        Gt_c = get_conting_gens(_res_scenarios);
-        Et_c = get_conting_arcs(_res_scenarios);
-        PVt_c = indices(T_c, PV_ph);
-        Bt_c = indices(T_c, B_ph);
-        Windt_c = indices(T_c, Wind_ph);
-        Et1_c = get_phase(Et_c,1);
-        Et2_c = get_phase(Et_c,2);
-        Et3_c = get_phase(Et_c,3);
-        
-        
-        auto gen_nodes_c = this->gens_per_node_time_cont(_res_scenarios);
-        auto batt_nodes_c = this->Batt_per_node_time_cont();
-        auto PV_nodes_c = this->PV_per_node_time_cont();
-        auto Wind_nodes_c = this->Wind_per_node_time_cont();
-        auto out_arcs_c = this->out_arcs_per_node_time_cont(_res_scenarios);
-        auto in_arcs_c = this->in_arcs_per_node_time_cont(_res_scenarios);
-        
-
-        /* Diesel power generation variables in each contingency/resiliency scenario*/
-        var<> Pg_c("Pg_c", pg_min.in(Gt_c), pg_max.in(Gt_c));
-        var<> Qg_c ("Qg_c", qg_min.in(Gt_c), qg_max.in(Gt_c));
-        var<> Pg_c_ ("Pg_c_", pg_min.in(Gt_c), pg_max.in(Gt_c));/**< Active power generation before losses */
-        ODO->add(Pg_c.in(Gt_c),Pg_c_.in(Gt_c),Qg_c.in(Gt_c));
-        DebugOff("size Pg_c = " << Pg_c.get_dim() << endl);
-        DebugOff("size Pg_c_ = " << Pg_c_.get_dim() << endl);
-        DebugOff("size Qg_c = " << Qg_c.get_dim() << endl);
-        
-        
-        /* Battery power generation variables */
-        var<> Pb_c("Pb_c", pb_min.in(Bt_c), pb_max.in(Bt_c));/**< Active power generation outside the battery */
-        var<> Qb_c ("Qb_c", qb_min.in(Bt_c), qb_max.in(Bt_c));/**< Reactive power generation outside the battery */
-        var<> Pb_c_("Pb_c_", pb_min.in(Bt_c), pb_max.in(Bt_c));/**< Active power generation in the battery */
-        ODO->add(Pb_c.in(Bt_c), Qb_c.in(Bt_c), Pb_c_.in(Bt_c));
-        DebugOff("size Pb_c = " << Pb_c.get_dim() << endl);
-        DebugOff("size Qb_c = " << Qb_c.get_dim() << endl);
-        
-        
-        /* PV power generation variables */
-        var<> Pv_c("Pv_c", 0,pv_max.in(PVt_c));
-        ODO->add(Pv_c.in(PVt_c));
-        DebugOff("size Pv_c = " << Pv_c.get_dim() << endl);
-        
-        /* Battery state of charge variables */
-        var<> Sc_c("Sc_c", pos_);
-        ODO->add(Sc_c.in(Bt_c));
-        DebugOff("size Sc_c = " << Sc_c.get_dim() << endl);
-        
-        /* Wind power generation variables */
-        var<> Pw_c("Pw_c", 0, pw_max.in(Windt_c));
-        ODO->add(Pw_c.in(Windt_c));
-        DebugOff("size Pw_c = " << Pw_c.get_dim() << endl);
-        
-        /* Power flow variables */
-        var<> Pij_c("Pfr_c", -1*S_max.in(Et_c), S_max.in(Et_c));
-        var<> Qij_c("Qfr_c", -1*S_max.in(Et_c), S_max.in(Et_c));
-        var<> Pji_c("Pto_c", -1*S_max.in(Et_c), S_max.in(Et_c));
-        var<> Qji_c("Qto_c", -1*S_max.in(Et_c), S_max.in(Et_c));
-        
-        ODO->add(Pij_c.in(Et_c),Pji_c.in(Et_c),Qij_c.in(Et_c),Qji_c.in(Et_c));
-        DebugOff("size Pij_c = " << Pij_c.get_dim() << endl);
-        
-        /** Voltage magnitude variables */
-        
-        
-        var<> vr_c("vr_c", -1*v_max.in(Nt_c),v_max.in(Nt_c));
-        var<> vi_c("vi_c", -1*v_max.in(Nt_c),v_max.in(Nt_c));
-        
-        var<> v_fr_c, v_to_c;
-        var<> v_fr1_c, v_to1_c;
-        var<> v_fr2_c, v_to2_c;
-        var<> v_fr3_c, v_to3_c;
-        var<> vr_fr_c, vr_to_c, vi_fr_c, vi_to_c;
-        var<> vr_fr1_c,vr_fr2_c,vr_fr3_c,vi_fr1_c,vi_fr2_c,vi_fr3_c;
-        var<> vr_to1_c,vr_to2_c,vr_to3_c,vi_to1_c,vi_to2_c,vi_to3_c;
-        
-        if (pmt==ACRECT) {
-            ODO->add(vr_c.in(Nt_c),vi_c.in(Nt_c));
-            vr_c.initialize_all(1);
-            vr_fr_c = vr_c.from(Et_c);
-            vr_to_c = vr_c.to(Et_c);
-            vi_fr_c = vi_c.from(Et_c);
-            vi_to_c = vi_c.to(Et_c);
-            
-            /* Indexing the voltage variables */
-            vr_fr1_c = vr_c.from(Et1_c); vi_fr1_c = vi_c.from(Et1_c);
-            vr_fr2_c = vr_c.from(Et2_c); vi_fr2_c = vi_c.from(Et2_c);
-            vr_fr3_c = vr_c.from(Et3_c); vi_fr3_c = vi_c.from(Et3_c);
-            vr_to1_c = vr_c.to(Et1_c); vi_to1_c = vi_c.to(Et1_c);
-            vr_to2_c = vr_c.to(Et2_c); vi_to2_c = vi_c.to(Et2_c);
-            vr_to3_c = vr_c.to(Et3_c); vi_to3_c = vi_c.to(Et3_c);
-            
-        }
-        auto Pij1_c = Pij_c.in(Et1_c);auto Pij2_c = Pij_c.in(Et2_c);auto Pij3_c = Pij_c.in(Et3_c);
-        auto Pji1_c = Pji_c.in(Et1_c);auto Pji2_c = Pji_c.in(Et2_c);auto Pji3_c = Pji_c.in(Et3_c);
-        auto Qij1_c = Qij_c.in(Et1_c);auto Qij2_c = Qij_c.in(Et2_c);auto Qij3_c = Qij_c.in(Et3_c);
-        auto Qji1_c = Qji_c.in(Et1_c);auto Qji2_c = Qji_c.in(Et2_c);auto Qji3_c = Qji_c.in(Et3_c);
-        /** Indices */
-        auto branch_id_ph1_c = get_branch_id_phase(1,true);
-        auto branch_id_ph2_c = get_branch_id_phase(2,true);
-        auto branch_id_ph3_c = get_branch_id_phase(3,true);
-        auto branch_ph1_c = get_branch_phase(1,true);
-        auto branch_ph2_c = get_branch_phase(2,true);
-        auto branch_ph3_c = get_branch_phase(3,true);
-        
-        auto ref_from_ph1_c = fixed_from_branch_phase(1,true);
-        auto ref_from_ph2_c = fixed_from_branch_phase(2,true);
-        auto ref_from_ph3_c = fixed_from_branch_phase(3,true);
-        auto ref_to_ph1_c = fixed_to_branch_phase(1,true);
-        auto ref_to_ph2_c = fixed_to_branch_phase(2,true);
-        auto ref_to_ph3_c = fixed_to_branch_phase(3,true);
-        auto from_ph1_c = from_branch_phase(1,true);
-        auto from_ph2_c = from_branch_phase(2,true);
-        auto from_ph3_c = from_branch_phase(3,true);
-        auto to_ph1_c = to_branch_phase(1,true);
-        auto to_ph2_c = to_branch_phase(2,true);
-        auto to_ph3_c = to_branch_phase(3,true);
-        
-        bool add_AC_Flow = false;
-        if(add_AC_Flow){
-            /** Power Flows */
-            param<Cpx> Y0_c("Y0_c"), Y1_c("Y1_c"), Y2_c("Y2_c"), Y3_c("Y3_c");
-            param<Cpx> Yc_fr_c("Yc_fr_c"), Yc_to_c("Yc_to_c");/* Line charging */
-            var<Cpx> Vfr_c("Vfr_c"), Vto_c("Vto_c");
-            var<Cpx> Sij_c("Sij_c"), Sji_c("Sji_c"), Vi_c("Vi_c"), Vj_c("Vj_c"), Vi1_c("Vi1_c"), Vi2_c("Vi2_c"), Vi3_c("Vi3_c"), Vj1_c("Vj1_c"), Vj2_c("Vj2_c"), Vj3_c("Vj3_c");
-            /* Phase 1 */
-            Yc_fr_c.real_imag(g_fr_.in(Et1_c),b_fr_.in(Et1_c));
-            Yc_to_c.real_imag(g_to_.in(Et1_c),b_to_.in(Et1_c));
-            Y0_c.real_imag(g.in(branch_id_ph1_c),b.in(branch_id_ph1_c));
-            Y1_c.real_imag(g.in(branch_ph1_c),b.in(branch_ph1_c));
-            if(pmt==ACRECT){
-                Vfr_c.real_imag(vr_fr1_c,vi_fr1_c);
-                Vto_c.real_imag(vr_to1_c,vi_to1_c);
-                Vi_c.real_imag(vr_c.in(ref_from_ph1_c),vi_c.in(ref_from_ph1_c));
-                Vj_c.real_imag(vr_c.in(ref_to_ph1_c),vi_c.in(ref_to_ph1_c));
-                Vi1_c.real_imag(vr_c.in(from_ph1_c),vi_c.in(from_ph1_c));
-                Vj1_c.real_imag(vr_c.in(to_ph1_c),vi_c.in(to_ph1_c));
-            }
-            Sij_c.real_imag(Pij1_c,Qij1_c);
-            Sji_c.real_imag(Pji1_c,Qji1_c);
-            
-            
-            Constraint<Cpx> S_fr1_c("S_fr1_c"), S_to1_c("S_to1_c");
-            S_fr1_c = Sij_c - (conj(Y0_c)+conj(Yc_fr_c))*Vfr_c*conj(Vfr_c) + conj(Y0_c)*Vfr_c*conj(Vto_c) - (conj(Y1_c)*Vi_c)*(conj(Vi1_c) - conj(Vj1_c));
-            S_to1_c = Sji_c - (conj(Y0_c)+conj(Yc_to_c))*Vto_c*conj(Vto_c) + conj(Y0_c)*Vto_c*conj(Vfr_c) - (conj(Y1_c)*Vj_c)*(conj(Vj1_c) - conj(Vi1_c));
-            ODO->add(S_fr1_c.in(Et1_c)==0);
-            ODO->add(S_to1_c.in(Et1_c)==0);
-            /* Phase 2 */
-            Yc_fr_c.real_imag(g_fr_.in(Et2_c),b_fr_.in(Et2_c));
-            Yc_to_c.real_imag(g_to_.in(Et2_c),b_to_.in(Et2_c));
-            Y0_c.real_imag(g.in(branch_id_ph2_c),b.in(branch_id_ph2_c));
-            Y2_c.real_imag(g.in(branch_ph2_c),b.in(branch_ph2_c));
-            
-            if(pmt==ACRECT){
-                Vfr_c.real_imag(vr_fr2_c,vi_fr2_c);
-                Vto_c.real_imag(vr_to2_c,vi_to2_c);
-                Vi_c.real_imag(vr_c.in(ref_from_ph2_c),vi_c.in(ref_from_ph2_c));
-                Vj_c.real_imag(vr_c.in(ref_to_ph2_c),vi_c.in(ref_to_ph2_c));
-                Vi2_c.real_imag(vr_c.in(from_ph2_c),vi_c.in(from_ph2_c));
-                Vj2_c.real_imag(vr_c.in(to_ph2_c),vi_c.in(to_ph2_c));
-            }
-            
-            Sij_c.real_imag(Pij2_c,Qij2_c);
-            Sji_c.real_imag(Pji2_c,Qji2_c);
-            Constraint<Cpx> S_fr2_c("S_fr2_c"), S_to2_c("S_to2_c");
-            S_fr2_c = Sij_c - (conj(Y0_c)+conj(Yc_fr_c))*Vfr_c*conj(Vfr_c) + conj(Y0_c)*Vfr_c*conj(Vto_c) - (conj(Y2_c)*Vi_c)*(conj(Vi2_c) - conj(Vj2_c));
-            S_to2_c = Sji_c - (conj(Y0_c)+conj(Yc_to_c))*Vto_c*conj(Vto_c) + conj(Y0_c)*Vto_c*conj(Vfr_c) - (conj(Y2_c)*Vj_c)*(conj(Vj2_c) - conj(Vi2_c));
-            ODO->add(S_fr2_c.in(Et2_c)==0);
-            ODO->add(S_to2_c.in(Et2_c)==0);
-            /* Phase 3 */
-            Yc_fr_c.real_imag(g_fr_.in(Et3_c),b_fr_.in(Et3_c));
-            Yc_to_c.real_imag(g_to_.in(Et3_c),b_to_.in(Et3_c));
-            Y0_c.real_imag(g.in(branch_id_ph3_c),b.in(branch_id_ph3_c));
-            Y3_c.real_imag(g.in(branch_ph3_c),b.in(branch_ph3_c));
-            if(pmt==ACRECT){
-                Vfr_c.real_imag(vr_fr3_c,vi_fr3_c);
-                Vto_c.real_imag(vr_to3_c,vi_to3_c);
-                Vi_c.real_imag(vr_c.in(ref_from_ph3_c),vi_c.in(ref_from_ph3_c));
-                Vj_c.real_imag(vr_c.in(ref_to_ph3_c),vi_c.in(ref_to_ph3_c));
-                Vi3_c.real_imag(vr_c.in(from_ph3_c),vi_c.in(from_ph3_c));
-                Vj3_c.real_imag(vr_c.in(to_ph3_c),vi_c.in(to_ph3_c));
-            }
-            
-            Sij_c.real_imag(Pij3_c,Qij3_c);
-            Sji_c.real_imag(Pji3_c,Qji3_c);
-            Constraint<Cpx> S_fr3_c("S_fr3_c"), S_to3_c("S_to3_c");
-            S_fr3_c = Sij_c - (conj(Y0_c)+conj(Yc_fr_c))*Vfr_c*conj(Vfr_c) + conj(Y0_c)*Vfr_c*conj(Vto_c) - (conj(Y3_c)*Vi_c)*(conj(Vi3_c) - conj(Vj3_c));
-            S_to3_c = Sji_c - (conj(Y0_c)+conj(Yc_to_c))*Vto_c*conj(Vto_c) + conj(Y0_c)*Vto_c*conj(Vfr_c) - (conj(Y3_c)*Vj_c)*(conj(Vj3_c) - conj(Vi3_c));
-            ODO->add(S_fr3_c.in(Et3_c)==0);
-            ODO->add(S_to3_c.in(Et3_c)==0);
-        }
-        else { /* Just add loss constraints */
-            Constraint<> Loss1("Loss1_c");
-            Loss1 = Pij1_c + Pji1_c;
-            ODO->add(Loss1.in(Et1_c)==0);
-            
-            Constraint<> Loss2("Loss2_c");
-            Loss2 = Pij2_c + Pji2_c;
-            ODO->add(Loss2.in(Et2_c)==0);
-
-            Constraint<> Loss3("Loss3_c");
-            Loss3 = Pij3_c + Pji3_c;
-            ODO->add(Loss3.in(Et3_c)==0);
-        }
-        
-//        Constraint<> BinaryCstrG("BinaryCstrG");
-//        BinaryCstrG += pow(w_g,2) - w_g;
-//        ODO->add(BinaryCstrG.in(pot_G_ph)>=0);
-//
-//        Constraint<> BinaryCstrPV("BinaryCstrPV");
-//        BinaryCstrPV += pow(w_pv,2) - w_pv;
-//        ODO->add(BinaryCstrPV.in(pot_PV_ph)>=0);
-//
-//        Constraint<> BinaryCstrBatt("BinaryCstrBatt");
-//        BinaryCstrBatt += pow(w_b,2) - w_b;
-//        ODO->add(BinaryCstrBatt.in(pot_B_ph)>=0);
-//
-//        Constraint<> BinaryCstrE("BinaryCstrE");
-//        BinaryCstrE += pow(w_e,2) - w_e;
-//        ODO->add(BinaryCstrE.in(pot_E_ph)>=0);
-        /** Fuel limit on generators */
-        auto gens_cont = this->gens_cont(_res_scenarios);
-        auto gens_time = this->gens_time(gens_cont);
-        Constraint<> Fuel("Fuel");
-        Fuel  = sum(Pg_c, gens_time);
-//        ODO->add(Fuel.in(gens_cont) <= _nb_fuel_hours*pg_max.in(gens_cont));
-//        Fuel.print();
-        /** KCL Flow conservation in contingency/resiliency mode */
-        Constraint<> KCL_P_c("KCL_P_c");
-        Constraint<> KCL_Q_c("KCL_Q_c");
-        KCL_P_c  = sum(Pij_c, out_arcs_c) + sum(Pji_c, in_arcs_c) + pl.in(Nt_c)*(1-pls.in(Nt_c)) - sum(Pg_c, gen_nodes_c) - sum(Pv_c, PV_nodes_c) - sum(Pb_c, batt_nodes_c) - sum(Pw_c, Wind_nodes_c);
-        KCL_Q_c  = sum(Qij_c, out_arcs_c) + sum(Qji_c, in_arcs_c) + ql.in(Nt_c)*(1-qls.in(Nt_c))  - sum(Qg_c, gen_nodes_c);
-        KCL_P_c += gs_.in(Nt_c)*(pow(vr_c.in(Nt_c),2)+pow(vi_c.in(Nt_c),2));
-        KCL_Q_c -= bs_.in(Nt_c)*(pow(vr_c.in(Nt_c),2)+pow(vi_c.in(Nt_c),2));
-        ODO->add(KCL_P_c.in(Nt_c) == 0);
-        ODO->add(KCL_Q_c.in(Nt_c) == 0);
-        /**  THERMAL LIMITS **/
-        auto exist_Et_c = get_conting_arcs_exist(_res_scenarios);
-        /*  Thermal Limit Constraints for existing lines */
-        Constraint<> Thermal_Limit_from_c("Thermal_Limit_from_c");
-        Thermal_Limit_from_c += pow(Pij_c.in(exist_Et_c), 2) + pow(Qij_c.in(exist_Et_c), 2);
-        Thermal_Limit_from_c -= pow(S_max.in(exist_Et_c), 2);
-        ODO->add(Thermal_Limit_from_c.in(exist_Et_c) <= 0);
-
-        Constraint<> Thermal_Limit_to_c("Thermal_Limit_to_c");
-        Thermal_Limit_to_c += pow(Pji_c.in(exist_Et_c), 2) + pow(Qji_c.in(exist_Et_c), 2);
-        Thermal_Limit_to_c -= pow(S_max.in(exist_Et_c), 2);
-        ODO->add(Thermal_Limit_to_c.in(exist_Et_c) <= 0);
-        
-        
-        auto pot_Gt_c = get_conting_gens_pot(_res_scenarios);
-        auto pot_Et_c = get_conting_arcs_pot(_res_scenarios);
-
-        /*  Thermal Limit Constraints for expansion edges */
-        Constraint<> Thermal_Limit_from_exp_c("Thermal_Limit_From_Exp_c");
-        Thermal_Limit_from_exp_c += pow(Pij_c.in(pot_Et_c), 2) + pow(Qij_c.in(pot_Et_c), 2);
-        Thermal_Limit_from_exp_c -= pow(w_e.in(pot_Et_c),2)*pow(S_max.in(pot_Et_c), 2);
-        ODO->add(Thermal_Limit_from_exp_c.in(pot_Et_c) <= 0);
-
-        Constraint<> Thermal_Limit_to_exp_c("Thermal_Limit_to_Exp_c");
-        Thermal_Limit_to_exp_c += pow(Pji_c.in(pot_Et_c), 2) + pow(Qji_c.in(pot_Et_c), 2);
-        Thermal_Limit_to_exp_c -= pow(w_e.in(pot_Et_c),2)*pow(S_max.in(pot_Et_c), 2);
-        ODO->add(Thermal_Limit_to_exp_c.in(pot_Et_c) <= 0);
-        
-        /** AC voltage limit constraints. */
-        if (pmt==ACRECT) {
-            Constraint<> Vol_limit_UB_c("Vol_limit_UB_c");
-            Vol_limit_UB_c = pow(vr_c.in(Nt_c), 2) + pow(vi_c.in(Nt_c), 2);
-            Vol_limit_UB_c -= pow(v_max.in(Nt_c), 2);
-            ODO->add(Vol_limit_UB_c.in(Nt_c) <= 0);
-
-            Constraint<> Vol_limit_LB_c("Vol_limit_LB_c");
-            Vol_limit_LB_c = pow(vr_c.in(Nt_c), 2) + pow(vi_c.in(Nt_c), 2);
-            Vol_limit_LB_c -= pow(v_min.in(Nt_c),2);
-            ODO->add(Vol_limit_LB_c.in(Nt_c) >= 0);
-        }
-        auto Nt_critical = indices(T_c, get_critical(1));
-        Constraint<> Critical_Loads_p("Critical_Loads_p");
-        Critical_Loads_p = pls.in(Nt_critical);
-        ODO->add(Critical_Loads_p.in(Nt_critical) == 0);
-
-        Constraint<> Critical_Loads_q("Critical_Loads_q");
-        Critical_Loads_q = qls.in(Nt_critical);
-        ODO->add(Critical_Loads_q.in(Nt_critical) == 0);
-        
-        /**  GENERATOR INVESTMENT **/
-        
-        /*  On/Off status */
-        Constraint<> OnOff_maxP_c("OnOff_maxP_c");
-        OnOff_maxP_c += Pg_c_.in(pot_Gt_c) - pg_max.in(pot_Gt_c)*w_g.in(pot_Gt_c);
-        ODO->add(OnOff_maxP_c.in(pot_Gt_c) <= 0);
-
-        Constraint<> OnOff_maxQ_c("OnOff_maxQ_c");
-        OnOff_maxQ_c += Qg_c.in(pot_Gt_c) - qg_max.in(pot_Gt_c)*w_g.in(pot_Gt_c);
-        ODO->add(OnOff_maxQ_c.in(pot_Gt_c) <= 0);
-
-        Constraint<> OnOff_minQ_c("OnOff_minQ_c");
-        OnOff_minQ_c += Qg_c.in(pot_Gt_c) - qg_min.in(pot_Gt_c)*w_g.in(pot_Gt_c);
-        ODO->add(OnOff_minQ_c.in(pot_Gt_c) >= 0);
-
-        /**  PV **/
-
-        auto pot_Bt_c = indices(T_c,pot_B_ph);
-        auto pot_PVt_c = indices(T_c,pot_PV_ph);
-        auto pot_Windt_c = indices(T_c,pot_Wind_ph);
-        Bt_c = indices(T_c,B_ph);
-
-        /*  Max Cap on Potential PV */
-        Constraint<> MaxCapPV_c("MaxCapPV_c");
-        MaxCapPV_c += Pv_c.in(pot_PVt_c) - Pv_cap.in(pot_PVt_c)*pv_out.in(pot_PVt_c);
-        ODO->add(MaxCapPV_c.in(pot_PVt_c) <= 0);
-
-        auto exist_Bt_c = indices(T_c,exist_B_ph);
-        auto exist_PVt_c = indices(T_c,exist_PV_ph);
-        auto exist_Windt_c = indices(T_c,exist_Wind_ph);
-
-        /*  Existing PV */
-        Constraint<> existPV_c("existPV_c");
-        existPV_c += Pv_c.in(exist_PVt_c) - pv_max.in(exist_PVt_c)*pv_out.in(exist_PVt_c);
-        ODO->add(existPV_c.in(exist_PVt_c) <= 0);
+//    Constraint<> EfficiencyPot("BatteryEfficiencyPotential");
+//    EfficiencyPot += Pb.in(pot_batt_eff)  - eff_a.in(pot_batt_eff)*Pb_.in(pot_batt_eff) - eff_b.in(pot_batt_eff)*w_b.in(pot_batt_eff);
+//    ODO->add(EfficiencyPot.in(pot_batt_eff) <= 0);
 
 
-        /**  BATTERIES **/
-
-        /*  Apparent Power Limit on Potential Batteries */
-        Constraint<> Apparent_Limit_Batt_Pot_c("Apparent_Limit_Batt_Potential_c");
-        Apparent_Limit_Batt_Pot_c += pow(Pb_c.in(pot_Bt_c), 2) + pow(Qb_c.in(pot_Bt_c), 2);
-        Apparent_Limit_Batt_Pot_c -= pow(w_b.in(pot_Bt_c),2)*pow(pb_max.in(pot_Bt_c), 2);
-        ODO->add(Apparent_Limit_Batt_Pot_c.in(pot_Bt_c) <= 0);
-
-        /*  Apparent Power Limit on Existing Batteries */
-        Constraint<> Apparent_Limit_Batt_c("Apparent_Limit_Batt_Existing_c");
-        Apparent_Limit_Batt_c += pow(Pb_c.in(exist_Bt_c), 2) + pow(Qb_c.in(exist_Bt_c), 2);
-        Apparent_Limit_Batt_c -= pow(pb_max.in(exist_Bt_c), 2);
-        ODO->add(Apparent_Limit_Batt_c.in(exist_Bt_c) <= 0);
-
-
-        /*  State Of Charge */
-        auto T1_c = T_c.exclude_first_each(scenarios);/**< Excluding first time step in each contingency/resiliency scenario */
-        auto Tn_c = T_c.exclude_last_each(scenarios);/**< Excluding last time step in each contingency/resiliency scenario */
-        auto Bt1_c = indices(T1_c,B_ph);
-        auto Btn_c = indices(Tn_c,B_ph);
-        Constraint<> State_Of_Charge_c("State_Of_Charge_c");
-        State_Of_Charge_c = Sc_c.in(Bt1_c) - Sc_c.in(Btn_c) + Pb_c_.in(Bt1_c);
-        ODO->add(State_Of_Charge_c.in(Bt1_c) == 0);
-
-        /*  State Of Charge at t0 for each contingency */
-        auto T0_c = T_c.first_each(scenarios);
-        auto Bat0_c = indices(T0_c,B_ph);
-        Constraint<> State_Of_Charge0_c("State_Of_Charge0_c");
-        State_Of_Charge0_c = Sc_c.in(Bat0_c);
-        ODO->add(State_Of_Charge0_c.in(Bat0_c) == 0);
-        Constraint<> Pb0_c("Pb0_c");
-        Pb0_c = Pb_c_.in(Bat0_c);
-        ODO->add(Pb0_c.in(Bat0_c) == 0);
-
-        /*  EFFICIENCIES */
-        Constraint<> DieselEff_c("DieselEff_c");
-        DieselEff_c += Pg_c - gen_eff.in(Gt_c)*Pg_c_;
-        ODO->add(DieselEff_c.in(Gt_c) == 0);
-
-        auto exist_batt_eff_c = indices(exist_Bt_c,_eff_pieces);
-        auto pot_batt_eff_c = indices(pot_Bt_c,_eff_pieces);
-        Constraint<> EfficiencyExist_c("BatteryEfficiencyExisting_c");
-        EfficiencyExist_c += Pb_c.in(exist_batt_eff_c)  - eff_a.in(exist_batt_eff_c)*Pb_c_.in(exist_batt_eff_c) - eff_b.in(exist_batt_eff_c);
-        ODO->add(EfficiencyExist_c.in(exist_batt_eff_c) <= 0);
-
-        Constraint<> EfficiencyPot_c("BatteryEfficiencyPotential_c");
-        EfficiencyPot_c += Pb_c.in(pot_batt_eff_c)  - eff_a.in(pot_batt_eff_c)*Pb_c_.in(pot_batt_eff_c) - eff_b.in(pot_batt_eff_c)*w_b.in(pot_batt_eff_c);
-        ODO->add(EfficiencyPot_c.in(pot_batt_eff_c) <= 0);
-    }
     
     return ODO;
 }

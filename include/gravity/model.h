@@ -19,15 +19,15 @@
 #include <thread>
 #ifdef USE_IPOPT
 #define HAVE_STDDEF_H
-#include <coin/IpIpoptApplication.hpp>
-#include <coin/IpTNLP.hpp>
+#include <IpIpoptApplication.hpp>
+#include <IpTNLP.hpp>
 #undef HAVE_STDDEF_H
 #endif
 #ifdef USE_GUROBI
 #include <gurobi_c++.h>
 #endif
 #ifdef USE_BONMIN
-#include <coin/BonTMINLP.hpp>
+#include <BonTMINLP.hpp>
 #endif
 
 using namespace std;
@@ -2577,6 +2577,31 @@ namespace gravity {
             cout << endl;
         }
         
+        
+        /** Write solution point to file */
+        void write_var_solution(const string& vname, int precision = 10){
+            ofstream myfile;
+            string fname = _name+"_"+ vname+"_solution.txt";
+            myfile.open(fname);
+            std::streambuf *coutbuf = std::cout.rdbuf(); //save old buf
+            std::cout.rdbuf(myfile.rdbuf());
+            auto v = get_var_ptr(vname);
+            v->print_vals(precision);
+            std::cout.rdbuf(coutbuf);
+            myfile.close();
+        }
+        
+        /** Write solution point to file */
+        void write_solution(int precision = 10){
+            ofstream myfile;
+            string fname = _name+"_solution.txt";
+            myfile.open(fname);
+            std::streambuf *coutbuf = std::cout.rdbuf(); //save old buf
+            std::cout.rdbuf(myfile.rdbuf());
+            print_solution(precision);
+            std::cout.rdbuf(coutbuf);
+            myfile.close();
+        }
         
         void print_solution(int prec=5) const{
             print_obj_val(prec);

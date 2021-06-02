@@ -1,7 +1,19 @@
+#include(ExternalProject)
+
 include_directories(${PROJECT_INCLUDE_DIR})
 
 
-
+  #message(STATUS "Adding Option Parser")
+  #ExternalProject_Add(opt_parser
+  #    SOURCE_DIR ${PROJECT_SOURCE_DIR}/third_party/cpp_option_parser
+  #    BUILD_IN_SOURCE 1
+  #    BUILD_COMMAND cmake .
+  #    INSTALL_COMMAND make
+  #)
+  #ExternalProject_Get_Property(opt_parser install_dir)
+  #add_library(option_parser STATIC IMPORTED)
+  #set_property(TARGET option_parser PROPERTY IMPORTED_LOCATION ${PROJECT_SOURCE_DIR}/third_party/cpp_option_parser/liboption_parser.a)
+  #add_dependencies(option_parser opt_parser)
 
 
 # add the automatically determined parts of the RPATH
@@ -27,6 +39,11 @@ endif()
 
 if (NOT Cplex)
     list(REMOVE_ITEM SOURCES ${PROJECT_SOURCE_DIR}/src/CplexProgram.cpp)
+    list(REMOVE_ITEM SOURCES ${PROJECT_SOURCE_DIR}/src/CplexCallback.cpp)
+endif()
+
+if (NOT Clp)
+    list(REMOVE_ITEM SOURCES ${PROJECT_SOURCE_DIR}/src/ClpProgram.cpp)
 endif()
 
 if (NOT Sdpa)
@@ -41,6 +58,36 @@ set(CPP_OPTION_PARSER option_parser)
 set(ARMADILLO armadillo)
 
 add_library(gravity STATIC ${SOURCES} ${HEADERS})
-target_link_libraries(gravity ${CPLEX_LIBRARIES} ${GUROBI_LIBRARIES} ${IPOPT_LIBRARIES} ${BONMIN_LIBRARIES} ${SDPA_LIBRARIES} ${MOSEK_LIBRARIES} ${XLNT_LIBRARIES} ${CPP_OPTION_PARSER} ${ARMADILLO})
+if(ADD_MP)
+ add_dependencies(gravity mp)
+endif()
+if(ADD_CoinUtils)
+ add_dependencies(gravity coinutils)
+endif()
+if(ADD_EIGEN)
+ add_dependencies(gravity eigen)
+endif(ADD_EIGEN)
+if(ADD_IPOPT)
+ add_dependencies(gravity ipopt)
+endif(ADD_IPOPT)
+if(OPT_PARSER)
+add_dependencies(gravity opt_parser)
+target_link_libraries(gravity ${CPLEX_LIBRARIES} ${GUROBI_LIBRARIES} ${IPOPT_LIBRARIES} ${BONMIN_LIBRARIES} ${SDPA_LIBRARIES} ${MOSEK_LIBRARIES} ${XLNT_LIBRARIES} ${OpenMPI_LIBRARIES} liboption_parser.a ${MP_LIBRARY} ${CoinUtils_LIBRARY})
+endif()
 
+if(NOT OPT_PARSER)
+target_link_libraries(gravity ${CPLEX_LIBRARIES} ${GUROBI_LIBRARIES} ${IPOPT_LIBRARIES} ${BONMIN_LIBRARIES} ${SDPA_LIBRARIES} ${MOSEK_LIBRARIES} ${XLNT_LIBRARIES} ${OpenMPI_LIBRARIES} ${MP_LIBRARY} ${CoinUtils_LIBRARY} ${CPP_OPTION_PARSER} ${ARMADILLO})
+endif()
 
+if(Cov)
+  set_target_properties(gravity
+  PROPERTIES
+    COMPILE_FLAGS "-ftest-coverage -fprofile-arcs"
+    LINK_FLAGS    "-lgcov --coverage -fprofile-arcs"
+  )
+endif()
+
+SET(CMAKE_SKIP_BUILD_RPATH  FALSE)
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE) 
+SET(CMAKE_INSTALL_RPATH "${PROJ_LIB_DIR}")
+SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)

@@ -15,10 +15,10 @@
 #ifdef USE_IPOPT
 #include <gravity/IpoptProgram.h>
 //#include "IpoptInterfaceCommon.h"
-#include <coin/IpRegOptions.hpp>
-#include <coin/IpJournalist.hpp>
-#include <coin/IpIpoptApplication.hpp>
-#include <coin/IpSolveStatistics.hpp>
+#include <IpRegOptions.hpp>
+#include <IpJournalist.hpp>
+#include <IpIpoptApplication.hpp>
+#include <IpSolveStatistics.hpp>
 
 
 using Ipopt::IsValid;
@@ -200,6 +200,7 @@ namespace gravity {
                     if(lin_solver.first){
                         iapp->Options()->SetStringValue("linear_solver", lin_solver.second);
                     }
+                    iapp->Options()->SetStringValue("linear_solver", "ma57");
 //                    iapp->Options()->SetStringValue("mehrotra_algorithm", mehrotra);
                     iapp->Options()->SetNumericValue("tol", tol);
 //                    iapp->Options()->SetIntegerValue("print_level", print_level);
