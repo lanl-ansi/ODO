@@ -23,10 +23,11 @@ option(MP "Link to AMPL MP libraries" ON)
 option(CoinUtils "Link to CoinUtils libraries" ON)
 
 # Include Armadillo
-execute_process(
-COMMAND ${CMAKE_COMMAND} -E tar xzf ${PROJECT_SOURCE_DIR}/ext_lib/armadillo.tar.xz
-WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/ext_lib
-)
+#execute_process(
+#COMMAND ${CMAKE_COMMAND} -E tar xzf ${PROJECT_SOURCE_DIR}/ext_lib/armadillo.tar.xz
+#WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/ext_lib
+#)
+
 find_package(ARMADILLO)
 include_directories(${ARMADILLO_ROOT_DIR}/include)
 set(LIBS ${LIBS} armadillo)
@@ -172,6 +173,7 @@ set(THIRDPARTY_INSTALL_PATH ${THIRDPARTY_BASE_PATH})
 
 
 include(ExternalProject)
+if(!WIN32)
 #CoinUtils
 if (CoinUtils)
 message(STATUS "Enable CoinUtils")
@@ -209,7 +211,7 @@ else(MP_FOUND)
  set(MP_LIBRARY ${THIRDPARTY_INSTALL_PATH}/Install/MP/build/lib/libmp.a)
 endif()
 endif()
-
+endif(WIN32)
 
 if(Ipopt)
 # Add Ipopt include dir and link to libraries
@@ -245,16 +247,16 @@ include(ExternalIpopt)
 endif (IPOPT_FOUND)
 endif()
 # Eigen
-find_package(Eigen QUIET)
-if (EIGEN_FOUND)
- message("-- Found Eigen version ${EIGEN_VERSION}: ${EIGEN_INCLUDE_DIRS}")
-else(EIGEN_FOUND)
- set(EIGEN_VERSION 3.3.7)
- include(ExternalEigen)
- set(EIGEN_INCLUDE_DIR ${THIRDPARTY_INSTALL_PATH}/Install/eigen)
- set(ADD_EIGEN TRUE)
-endif (EIGEN_FOUND)
-include_directories(${EIGEN_INCLUDE_DIR})
+# find_package(Eigen QUIET)
+# if (EIGEN_FOUND)
+#  message("-- Found Eigen version ${EIGEN_VERSION}: ${EIGEN_INCLUDE_DIRS}")
+# else(EIGEN_FOUND)
+#  set(EIGEN_VERSION 3.3.7)
+#  include(ExternalEigen)
+#  set(EIGEN_INCLUDE_DIR ${THIRDPARTY_INSTALL_PATH}/Install/eigen)
+#  set(ADD_EIGEN TRUE)
+# endif (EIGEN_FOUND)
+# include_directories(${EIGEN_INCLUDE_DIR})
 
 # cpp_option_parser
 if (OPT_PARSER)

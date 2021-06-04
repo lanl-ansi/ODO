@@ -9,8 +9,15 @@ find_path(XLNT_INCLUDE_DIR
 	HINTS ext_lib/xlnt-1.3.0/build/include/xlnt
 	HINTS ${XLNT_ROOT_DIR}/include
 )
-
-if(APPLE)
+if(WIN32)
+find_library(XLNT_LIBRARY 
+	libxlntd.dll.a
+	HINTS /usr/local/lib
+	HINTS ext_lib/xlnt-1.3.0/source
+	HINTS ext_lib/xlnt-1.3.0/build/source
+	HINTS ${XLNT_ROOT_DIR}/source
+)
+elseif(APPLE)
 find_library(XLNT_LIBRARY
 	libxlnt.dylib
 	HINTS /usr/local/lib

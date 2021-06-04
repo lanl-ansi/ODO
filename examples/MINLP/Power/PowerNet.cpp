@@ -2800,7 +2800,10 @@ void PowerNet::readJSON(const string& fname){
             this->S_max.add_val(ph_key, 10*rating[i].GetDouble());
         }
 //        br_r_.print();
+DebugOn("getting ready to call arma\n");
         arma::cx_mat ymat_inv = arma::pinv(ymat);
+
+        DebugOn("Called pinv\n");
         if(arc->_phases.count(1)>0){
             Yr11.add_val("ph1,"+arc->_name, ymat_inv(0,0).real()/3.);
             Yi11.add_val("ph1,"+arc->_name, -ymat_inv(0,0).imag()/3.);
@@ -2834,6 +2837,8 @@ void PowerNet::readJSON(const string& fname){
                     continue;
                 auto key = "ph"+to_string(i+1)+",ph"+to_string(j+1)+","+arc->_name;
                 cross_phase.insert(key);
+                // g.add_val(key, ymat(i,j).real()/(ymat(i,j).real()*ymat(i,j).real() + ymat(i,j).imag()*ymat(i,j).imag()));
+                // b.add_val(key, ymat(i,j).imag()/(ymat(i,j).real()*ymat(i,j).real() + ymat(i,j).imag()*ymat(i,j).imag()));
                 g.add_val(key, ymat_inv(i,j).real());
                 b.add_val(key, ymat_inv(i,j).imag());
             }

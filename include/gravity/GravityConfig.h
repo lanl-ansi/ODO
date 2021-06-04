@@ -1,1 +1,1 @@
-#define prj_dir "/Users/l297598/Utils/ODO"
+#define prj_dir "C:/Users/hassa/utils/ODO"
